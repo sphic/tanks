@@ -159,7 +159,15 @@ button{font:inherit;color:inherit}
       <div class="row"><button class="pill go" id="btnSolo">Play solo</button><button class="pill go" id="btnHost">Host a game</button></div>
       <div class="row" style="margin-top:8px"><input id="codeIn" class="field" maxlength="5" placeholder="Room code" autocomplete="off" style="width:120px;text-transform:uppercase"><button class="pill" id="btnJoin">Join friend</button></div>
       <div class="row" style="margin-top:8px"><button class="pill go" id="btnRejoin" hidden>Rejoin</button></div>
-      <p id="joinMsg" class="empty-note"></p>
+      <p id="joinMsg" class="empty-note" aria-live="polite"></p>
+      <details id="relayBox" style="margin-top:8px">
+        <summary style="cursor:pointer;font-size:14px">Connection settings (if friends can't connect)</summary>
+        <p class="empty-note">Many home, school, and phone networks block direct connections between players. A relay (TURN) server gets around that. Make a free account at <strong>metered.ca</strong> (TURN server) or <strong>expressturn.com</strong>, then paste its details here. It works if either the host or the joiner has one, but both is best.</p>
+        <div class="row"><input id="relayUrl" class="field" style="flex:1" autocomplete="off" placeholder="turn:server:3478 — or a https:// credentials link from Metered"></div>
+        <div class="row" style="margin-top:6px"><input id="relayUser" class="field" style="flex:1" autocomplete="off" placeholder="Username (not needed for a https link)"><input id="relayPass" class="field" style="flex:1" type="password" autocomplete="off" placeholder="Password"></div>
+        <div class="row" style="margin-top:6px"><button class="pill" id="btnRelayTest">Save & test</button><button class="pill" id="btnRelayClear">Clear</button></div>
+        <p id="relayMsg" class="empty-note" aria-live="polite"></p>
+      </details>
     </div>
     <p>A bigger wrapping world. Rare nodes are simply rare, anywhere on the map.</p>
     <ul>
@@ -2141,22 +2149,114 @@ function newCode(){let s='';const r=new Uint32Array(5);crypto.getRandomValues(r)
 function netSend(m){if(NET&&NET.conn&&NET.conn.open&&!NET.dead)try{NET.conn.send(m);}catch(_){}}
 function joinMsg(s){$('joinMsg').textContent=s;}
 function showRoom(code){const r=$('room');r.hidden=false;r.innerHTML='Room <span class="code"></span>';r.querySelector('.code').textContent=code;}
-function peerLib(){if(!window.Peer){joinMsg('The multiplayer library didn’t load. Check your internet connection and reload.');return false;}return true;}
+function peerLib(){if(!window.Peer){joinMsg('The multiplayer library didn’t load. Check your internet connection and reload.');return false;}
+  if(location.protocol==='file:'&&!window.RTCPeerConnection){joinMsg('This browser can’t do multiplayer from a local file. Open the game in Chrome, Edge, or Firefox.');return false;}return true;}
+// Everyone must run the same game file: the world is built from it. Bump this whenever the game changes.
+const NET_VER='2026-09-25d';
+// ---- connection routes (ICE) ----
+// STUN finds a direct route between players. When a network blocks that, a TURN relay carries the traffic instead.
+// PeerJS's built-in free relay is down, so players can add their own (stored only in this browser).
+const STUN=[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']},{urls:'stun:stun.cloudflare.com:3478'}];
+const RELAY_KEY='augtanks_relay';
+function relayCfg(){try{const r=JSON.parse(localStorage.getItem(RELAY_KEY)||'null');if(r&&typeof r.url==='string'&&r.url.trim())return r;}catch(_){}return null;}
+async function iceServers(){const r=relayCfg();if(!r)return STUN;const url=r.url.trim();
+  try{if(/^https:\/\//i.test(url)){// a credentials link (e.g. Metered) hands back a ready-made list of relay servers
+      const res=await fetch(url,{cache:'no-store'});const j=await res.json();const list=Array.isArray(j)?j:Array.isArray(j.iceServers)?j.iceServers:[];
+      return STUN.concat(list.filter(s=>s&&s.urls));}
+    const urls=url.split(/[\s,]+/).filter(u=>/^turns?:/i.test(u));if(!urls.length)return STUN;
+    return STUN.concat([{urls,username:r.user||'',credential:r.pass||''}]);}catch(e){return STUN;}}
+async function peerOpts(){return {config:{iceServers:await iceServers()},debug:0};}
+// ask the relay for an address; if it hands one back, it works from this network
+async function testRelay(){const servers=(await iceServers()).filter(s=>[].concat(s.urls).some(u=>/^turns?:/i.test(u)));
+  if(!servers.length)return {ok:false,msg:'No relay set. Enter a TURN server or a credentials link first.'};
+  const pc=new RTCPeerConnection({iceServers:servers,iceTransportPolicy:'relay'});pc.createDataChannel('t');let got=false;
+  pc.onicecandidate=e=>{if(e.candidate&&/ typ relay/.test(e.candidate.candidate))got=true;};
+  await pc.setLocalDescription(await pc.createOffer());for(let i=0;i<16&&!got;i++)await new Promise(r=>setTimeout(r,500));pc.close();
+  return got?{ok:true,msg:'Relay works from this network. Friends who couldn’t connect should be able to now.'}:{ok:false,msg:'The relay didn’t answer. Double-check the address, username, and password.'};}
+const BLOCKED_HELP='Couldn’t connect directly or through the backup relay. Check that you both have internet access and the same, newest game, then try again. If it keeps failing, add your own relay under “Connection settings” below.';
+// watch a connection's route-finding; call onFail if it gives up
+function watchIce(conn,onFail){let n=0;const hook=()=>{const pc=conn.peerConnection;if(!pc){if(n++<40)setTimeout(hook,100);return;}
+    pc.addEventListener('iceconnectionstatechange',()=>{if(pc.iceConnectionState==='failed')onFail();});};hook();}
+
+// ---- backup relay (no account needed) ----
+// When two networks can't connect directly, game messages go through a free public message server (MQTT) instead.
+// Everything is compressed and encrypted with a key made from the room code, and the channel name is a hash of it,
+// so other users of that public server can't read or fake your game's traffic. It's slower than a direct link,
+// so it runs at half the update rate.
+const BROKERS=['wss://test.mosquitto.org:8081','wss://broker.emqx.io:8084/mqtt'];
+let mqttLoad=null;
+function loadMqtt(){if(window.mqtt)return Promise.resolve(window.mqtt);
+  return mqttLoad||(mqttLoad=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js';
+    s.onload=()=>res(window.mqtt);s.onerror=()=>{mqttLoad=null;rej(new Error('relay library failed to load'));};document.head.appendChild(s);}));}
+async function brokerConnect(){const mq=await loadMqtt();
+  for(const url of BROKERS){const c=await new Promise(res=>{let settled=false;const done=v=>{if(!settled){settled=true;res(v);}};
+      const cl=mq.connect(url,{connectTimeout:8000,reconnectPeriod:0,clean:true});
+      cl.once('connect',()=>done(cl));cl.once('error',()=>{try{cl.end(true);}catch(_){}done(null);});
+      setTimeout(()=>{if(!cl.connected){try{cl.end(true);}catch(_){}done(null);}},10000);});
+    if(c){c.options.reconnectPeriod=3000;return c;}}
+  return null;}
+async function roomKey(code){const enc=new TextEncoder(),base=await crypto.subtle.importKey('raw',enc.encode('augtanks|'+code),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:enc.encode('augtanks-relay-v1'),iterations:60000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);}
+async function roomTopic(code){const h=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode('augtanks-topic|'+NET_VER+'|'+code)));
+  return 'augtanks/'+[...h.slice(0,12)].map(b=>b.toString(16).padStart(2,'0')).join('');}
+async function relayPack(key,obj){const raw=new TextEncoder().encode(JSON.stringify(obj));
+  const z=await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer();
+  const iv=crypto.getRandomValues(new Uint8Array(12)),ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,z);
+  const out=new Uint8Array(12+ct.byteLength);out.set(iv);out.set(new Uint8Array(ct),12);return out;}
+async function relayUnpack(key,buf){const b=new Uint8Array(buf);if(b.length<29)return null;
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:b.slice(0,12)},key,b.slice(12)); // throws if it wasn't made with this room's key
+  const raw=await new Response(new Blob([pt]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer();
+  if(raw.byteLength>3e6)return null;return JSON.parse(new TextDecoder().decode(raw));}
+// looks like a PeerJS connection to the rest of the game (open, send, on, close)
+class RelayConn{constructor(client,key,topic,wrap){this.client=client;this.key=key;this.topic=topic;this.wrap=wrap;this.open=false;this.relay=true;this.h={};this.chain=Promise.resolve();}
+  on(ev,fn){(this.h[ev]||(this.h[ev]=[])).push(fn);}
+  emit(ev,x){for(const f of this.h[ev]||[])try{f(x);}catch(e){console.error(e);}}
+  send(m){if(!this.open)return;const body=this.wrap?this.wrap(m):m;
+    this.chain=this.chain.then(()=>relayPack(this.key,body)).then(b=>{if(this.client.connected)this.client.publish(this.topic,b,{qos:0});}).catch(()=>{});}
+  close(){if(this.closed)return;this.closed=true;this.open=false;if(this.onClose)this.onClose();this.emit('close');}}
+// host side: listen on the room's relay channel; each guest gets its own virtual connection
+async function startRelayHost(code){try{const client=await brokerConnect();if(!client){sysChat('The backup relay couldn’t be reached. Only direct connections will work right now.');return false;}
+    const key=await roomKey(code),base=await roomTopic(code),inbox=base+'/h',conns=new Map();
+    client.subscribe(inbox,{qos:0});
+    client.on('message',async(topic,buf)=>{if(topic!==inbox)return;let w;try{w=await relayUnpack(key,buf);}catch(_){return;}
+      if(!w||typeof w.f!=='string'||!/^[0-9a-f]{16}$/.test(w.f)||!w.m||typeof w.m!=='object')return;
+      let c=conns.get(w.f);
+      if(!c){if(w.m.t!=='hello')return;c=new RelayConn(client,key,base+'/g/'+w.f);c.onClose=()=>conns.delete(w.f);conns.set(w.f,c);onGuestConn(c);c.open=true;c.emit('open');}
+      if(!c.closed)c.emit('data',w.m);});
+    if(NET)NET.relay={client,key,base,conns};return true;}
+  catch(e){sysChat('The backup relay couldn’t start ('+e.message+'). Only direct connections will work right now.');return false;}}
+// guest side: talk to the room over the relay; resolves with the connection, or null if the broker is unreachable
+async function relayGuestConn(code){const client=await brokerConnect();if(!client)return null;
+  const key=await roomKey(code),base=await roomTopic(code),gid=[...crypto.getRandomValues(new Uint8Array(8))].map(b=>b.toString(16).padStart(2,'0')).join('');
+  const conn=new RelayConn(client,key,base+'/h',m=>({f:gid,m}));const inbox=base+'/g/'+gid;
+  client.subscribe(inbox,{qos:0});
+  client.on('message',async(topic,buf)=>{if(topic!==inbox)return;let m;try{m=await relayUnpack(key,buf);}catch(_){return;}if(m&&typeof m==='object'&&!conn.closed)conn.emit('data',m);});
+  conn.onClose=()=>{try{client.end(true);}catch(_){}};return conn;}
 
 // ---- host ----
-function startHost(){if(!peerLib())return;const code=newCode();const peer=new Peer(PEER_PREFIX+code);joinMsg('Opening a room…');
-  peer.on('open',()=>{if(started)return;NET={role:'host',peer,code,snapT:0,miniT:0};startGame();showRoom(code);
-    sysChat(`Room ${code} is open. Friends join with this code.`);});
-  peer.on('error',err=>{if(!started){if(err.type==='unavailable-id'){peer.destroy();startHost();return;}joinMsg('Couldn’t open a room ('+err.type+').');}
+// The host listens two ways at once: direct connections (PeerJS) and the backup relay. Friends use whichever works.
+async function startHost(){if(!peerLib())return;joinMsg('Opening a room…');const code=newCode();const peer=new Peer(PEER_PREFIX+code,await peerOpts());
+  const open=relayOnly=>{if(started)return;NET={role:'host',peer:relayOnly?null:peer,code,snapT:0,miniT:0,tick:0};startGame();showRoom(code);
+    sysChat(`Room ${code} is open. Friends join with this code.`);
+    startRelayHost(code).then(ok=>{if(ok)sysChat('Backup relay ready: friends whose networks block direct connections will join through it automatically.');});};
+  peer.on('open',()=>open(false));
+  peer.on('error',err=>{if(!started){if(err.type==='unavailable-id'){peer.destroy();startHost();return;}
+      // the matchmaking server is unreachable: host through the relay only
+      if(err.type==='network'||err.type==='server-error'||err.type==='socket-error'){open(true);sysChat('The direct-connection server couldn’t be reached, so friends will join through the relay.');return;}
+      joinMsg('Couldn’t open a room ('+err.type+').');}
     else if(err.type!=='peer-unavailable')toast('Network problem: '+err.type);});
   peer.on('disconnected',()=>{if(!peer.destroyed)setTimeout(()=>{try{peer.reconnect();}catch(_){}},2000);});
   peer.on('connection',onGuestConn);}
 const REJOIN_S=600; // a disconnected player's tank and base wait this long for them to come back
 const online=()=>pls.filter(p=>!p.offline).length;
-function onGuestConn(conn){let q=null;
-  conn.on('open',()=>{setTimeout(()=>{if(!q&&online()>=MAX_PLAYERS){try{conn.send({t:'full'});}catch(_){}setTimeout(()=>conn.close(),400);}},1500);});
+function onGuestConn(conn){let q=null,opened=false;
+  // someone found the room but their connection never got through: tell the host why
+  conn.on('open',()=>{opened=true;setTimeout(()=>{if(!q&&online()>=MAX_PLAYERS){try{conn.send({t:'full'});}catch(_){}setTimeout(()=>conn.close(),400);}},1500);});
   conn.on('data',m=>{if(!m||typeof m!=='object'||typeof m.t!=='string')return;
-    if(!q){if(m.t!=='hello')return;q=rejoin(conn,m);if(!q&&online()<MAX_PLAYERS)q=addGuest(conn,m);return;}
+    if(!q){if(m.t!=='hello')return;
+      if(m.v!==NET_VER){try{conn.send({t:'badver',v:NET_VER});}catch(_){}setTimeout(()=>conn.close(),500);
+        sysChat(`${cleanText(m.name,16)||'Someone'} tried to join with a different version of the game file.`);return;}
+      q=rejoin(conn,m);if(!q&&online()<MAX_PLAYERS)q=addGuest(conn,m);return;}
     if(q.conn!==conn)return;
     // flood guard: anything past 90 messages a second is dropped
     const now=performance.now();q.lastMsg=now;if(now-q.msgT>1000){q.msgT=now;q.msgN=0;}if(++q.msgN>90)return;
@@ -2241,10 +2341,11 @@ function snapFor(q){const c=q.tank,R=(q.view||900)+160;const near=e=>Math.abs(wd
   const F=[];let mx=q.lastFx||0;for(const f of fx){if(f.id<=(q.lastFx||0))continue;mx=Math.max(mx,f.id);const s=serFx(f);if(s&&near(s))F.push(s);}
   const WL=wells.filter(near).map(w=>[r0(w.x),r0(w.y),w.fly>0?1:0,w.rw||270]),SL=strikes.filter(near).map(s=>[r0(s.x),r0(s.y),s.r,r2(s.t)]);
   q.lastFx=mx;return {e:E,b:B,p:P,f:F,w:WL,s:SL,mn:MN,me:meOf(q)};}
-function netHostTick(dt){const N=NET;if(N.role!=='host')return;N.snapT+=dt;N.miniT+=dt;if(N.snapT<0.05)return;N.snapT=0;
+function netHostTick(dt){const N=NET;if(N.role!=='host')return;N.snapT+=dt;N.miniT+=dt;if(N.snapT<0.05)return;N.snapT=0;N.tick=(N.tick||0)+1;
   const mini=N.miniT>1;if(mini)N.miniT=0;
   for(const f of fx)if(!f.id)f.id=++fxSeq;
-  for(const q of pls){if(!q.conn||!q.conn.open)continue;const msg=Object.assign({t:'s'},snapFor(q));
+  // relay guests get 10 updates a second instead of 20 (the public relay is slower); minimap updates still arrive
+  for(const q of pls){if(!q.conn||!q.conn.open)continue;if(q.conn.relay&&(N.tick&1)&&!mini)continue;const msg=Object.assign({t:'s'},snapFor(q));
     if(mini)msg.mm=miniData(q);
     const inv=invOf(q),sig=JSON.stringify(inv);if(sig!==q.lastInv){q.lastInv=sig;msg.inv=inv;}
     const soc=socialOf(q),ss=JSON.stringify(soc);if(ss!==q.lastSoc){q.lastSoc=ss;msg.soc=soc;}
@@ -2257,20 +2358,41 @@ function netHostTick(dt){const N=NET;if(N.role!=='host')return;N.snapT+=dt;N.min
 
 // ---- guest ----
 function startJoin(raw){const code=cleanText(raw,5).toUpperCase();if(!/^[A-Z0-9]{5}$/.test(code)){joinMsg('Enter the 5-character room code.');return;}
-  if(!peerLib())return;joinMsg('Connecting…');const peer=new Peer();
-  peer.on('open',()=>{const conn=peer.connect(PEER_PREFIX+code,{reliable:true});
-    const to=setTimeout(()=>{if(!started){joinMsg('No answer from that room. Check the code and try again.');peer.destroy();}},15000);
-    const rj=rejoinInfo();const token=rj&&rj.code===code?rj.token:undefined;
-    conn.on('open',()=>{conn.send({t:'hello',name:myName,color:myColor,token});});
-    conn.on('data',m=>{if(!m||typeof m!=='object')return;
-      if(m.t==='welcome'&&!started){clearTimeout(to);G.id=+m.id;NET={role:'guest',peer,conn,code};
-        // remember how to come back as this same character
-        if(typeof m.token==='string'&&/^[0-9a-f]{32}$/.test(m.token))try{localStorage.setItem(RKEY,JSON.stringify({code,token:m.token,name:myName,t:Date.now()}));}catch(_){}
-        startGame();showRoom(/^[A-Z0-9]{5}$/.test(m.code)?m.code:code);if(m.back)toast('Welcome back — you’re in the same tank');return;}
-      if(m.t==='full'){clearTimeout(to);joinMsg('That room is full.');return;}
-      if(isGuest()&&m.t==='s')onSnap(m);});
-    conn.on('close',()=>{if(isGuest()&&!NET.dead){NET.dead=true;lostConnection();}});});
-  peer.on('error',err=>{if(!started)joinMsg(err.type==='peer-unavailable'?'No room with that code is open.':'Couldn’t connect ('+err.type+').');});}
+  if(!peerLib())return;joinMsg('Reaching the matchmaking server…');startJoinPeer(code);}
+// The join handshake, the same over a direct connection or the relay. st tracks this attempt (done, opened, timer).
+function joinVia(conn,peer,code,st){const rj=rejoinInfo(),token=rj&&rj.code===code?rj.token:undefined;
+  const stop=msg=>{if(st.done||started)return;st.done=true;clearTimeout(st.to);joinMsg(msg);try{conn.close();}catch(_){}try{peer&&peer.destroy();}catch(_){}};
+  conn.on('open',()=>{st.opened=true;joinMsg(conn.relay?'Reached the room through the relay. Joining…':'Connected. Joining…');conn.send({t:'hello',v:NET_VER,name:myName,color:myColor,token});});
+  conn.on('data',m=>{if(!m||typeof m!=='object')return;
+    if(m.t==='welcome'&&!started&&!st.done){st.done=true;clearTimeout(st.to);G.id=+m.id;NET={role:'guest',peer,conn,code};
+      // remember how to come back as this same character
+      if(typeof m.token==='string'&&/^[0-9a-f]{32}$/.test(m.token))try{localStorage.setItem(RKEY,JSON.stringify({code,token:m.token,name:myName,t:Date.now()}));}catch(_){}
+      startGame();showRoom(/^[A-Z0-9]{5}$/.test(m.code)?m.code:code);if(m.back)toast('Welcome back — you’re in the same tank');
+      if(conn.relay)addChat(null,null,'Connected through the backup relay: a direct connection was blocked, so expect a little extra lag.');return;}
+    if(m.t==='full'){stop('That room is full.');return;}
+    if(m.t==='badver'){stop('You and the host have different versions of the game file. Both of you need the same, newest augment-tanks-v2.html (press Ctrl+F5 to refresh).');return;}
+    if(isGuest()&&NET.conn===conn&&m.t==='s')onSnap(m);});
+  conn.on('close',()=>{if(isGuest()&&NET.conn===conn&&!NET.dead){NET.dead=true;lostConnection();}});}
+// First try a direct connection. If the room can't be reached directly (blocked networks, slow start, or the
+// matchmaking server is down), switch to the backup relay automatically.
+async function startJoinPeer(code){const peer=new Peer(await peerOpts());const st={done:false,opened:false,to:null};let moved=false;
+  const toRelay=why=>{if(moved||started||st.done)return;moved=true;st.done=true;clearTimeout(st.to);try{peer.destroy();}catch(_){}startJoinRelay(code,why);};
+  peer.on('open',()=>{joinMsg('Looking for room '+code+'…');const conn=peer.connect(PEER_PREFIX+code,{reliable:true});
+    setTimeout(()=>{if(!st.opened&&!st.done)joinMsg('Found the room. Trying a direct connection…');},3000);
+    st.to=setTimeout(()=>{if(!st.opened)toRelay('slow');},12000);
+    watchIce(conn,()=>toRelay('blocked'));
+    joinVia(conn,peer,code,st);});
+  peer.on('error',err=>{if(started)return;toRelay(err.type==='peer-unavailable'?'noroom':'server');});}
+async function startJoinRelay(code,why){
+  joinMsg(why==='noroom'?'Room not found directly. Checking the backup relay…':'A direct connection isn’t possible between your networks. Switching to the backup relay…');
+  let conn=null;try{conn=await relayGuestConn(code);}catch(_){}
+  if(started)return;
+  if(!conn){joinMsg(why==='noroom'?'No room with that code is open. Check the code, and make sure the host is in the game (not on the start screen).'
+    :'The backup relay couldn’t be reached either. Check your internet connection, or add your own relay under “Connection settings”.');return;}
+  const st={done:false,opened:false,to:null};
+  st.to=setTimeout(()=>{if(started||st.done)return;st.done=true;conn.close();
+    joinMsg(why==='noroom'?'No room with that code is open. Check the code, and make sure the host is in the game and has the newest version.':BLOCKED_HELP);},12000);
+  joinVia(conn,null,code,st);conn.open=true;conn.emit('open');}
 const RKEY='augtanks_rejoin';
 function rejoinInfo(){try{const r=JSON.parse(localStorage.getItem(RKEY)||'null');if(r&&/^[A-Z0-9]{5}$/.test(r.code)&&/^[0-9a-f]{32}$/.test(r.token)&&Date.now()-r.t<REJOIN_S*1000)return r;}catch(_){}return null;}
 // the host keeps a dropped player's tank for 10 minutes; reloading and rejoining puts them back in it
@@ -2334,7 +2456,7 @@ function clientStep(dt){T+=dt;const k=Math.min(1,dt*14);
   if(!player.dead)readInput();else{player.input.mx=0;player.input.my=0;player.input.fire=false;player.input.btns=0;}
   // quick taps between sends still count: buttons pressed since the last send are included
   G.latch|=player.input.btns||0;
-  G.sendT+=dt;if(G.sendT>=0.05){G.sendT=0;const i=player.input;
+  G.sendT+=dt;if(G.sendT>=(NET.conn&&NET.conn.relay?0.1:0.05)){G.sendT=0;const i=player.input;
     netSend({t:'in',mx:r2(i.mx),my:r2(i.my),a:Math.round(player.aim*1000)/1000,b:G.latch|(i.btns||0),v:Math.round(Math.max(VW,VH)/2),
       m:i.hasMouse?1:0,wx:Math.round(i.wx||0),wy:Math.round(i.wy||0)});G.latch=0;}
   cam.x=player.x;cam.y=player.y;}
@@ -2363,6 +2485,13 @@ $('btnSolo').addEventListener('click',()=>{if(busy||started||!readForm())return;
 $('btnHost').addEventListener('click',()=>{if(busy||started||!readForm())return;busy=true;setTimeout(()=>busy=false,4000);startHost();});
 $('btnJoin').addEventListener('click',()=>{if(busy||started||!readForm())return;busy=true;setTimeout(()=>busy=false,4000);startJoin(codeIn.value);});
 codeIn.addEventListener('keydown',e=>{if(e.key==='Enter')$('btnJoin').click();});
+// relay (TURN) settings: saved in this browser only
+{const r=relayCfg();if(r){$('relayUrl').value=r.url;$('relayUser').value=r.user||'';$('relayPass').value=r.pass||'';$('relayBox').open=true;$('relayMsg').textContent='A relay is set.';}}
+$('btnRelayTest').addEventListener('click',async()=>{const url=$('relayUrl').value.trim(),msg=$('relayMsg');
+  if(!/^(turns?:|https:\/\/)/i.test(url)){msg.textContent='Enter an address starting with turn:, turns:, or https://';return;}
+  try{localStorage.setItem(RELAY_KEY,JSON.stringify({url,user:$('relayUser').value.trim(),pass:$('relayPass').value}));}catch(_){}
+  msg.textContent='Saved. Testing the relay…';const r=await testRelay();msg.textContent=(r.ok?'✓ ':'✗ ')+r.msg;});
+$('btnRelayClear').addEventListener('click',()=>{try{localStorage.removeItem(RELAY_KEY);}catch(_){}for(const id of ['relayUrl','relayUser','relayPass'])$(id).value='';$('relayMsg').textContent='Relay removed.';});
 const AUTO_REJOIN='augtanks_autorejoin';
 $('btnRejoin').addEventListener('click',()=>{const r=rejoinInfo();if(!r)return;
   if(started){try{sessionStorage.setItem(AUTO_REJOIN,'1');}catch(_){}location.reload();return;}
@@ -2382,7 +2511,7 @@ document.addEventListener('visibilitychange',()=>{last=performance.now();});
 // guests keep pinging even from a background tab so the host knows they're still here
 setInterval(()=>{if(isGuest()&&!NET.dead)netSend({t:'ping'});},1000);
 window.__AT={step,render,get player(){return player},get base(){return base},get ents(){return ents},get store(){return store},get pickups(){return pickups},get bullets(){return bullets},
-  get pls(){return pls},get me(){return me},dbg:{dropAug,kill,hurt,newAug,startEvent,buildStruct,setLock,startRecall,progress,get events(){return events},get beacons(){return beacons},get structs(){return structs},get wells(){return wells},get strikes(){return strikes},get mines(){return mines},get env(){return env},set evT(v){evT=v}},get G(){return G},build(){btnBase.click();},doParty,doMenu,addGuestForTest(n,c){const q=mkPl(nextPlId++,n,c);pls.push(q);const s=spawnPoint();q.tank=mkPlayerTank(q,s.x,s.y);ents.push(q.tank);return q;}};
+  get pls(){return pls},get me(){return me},dbg:{dropAug,kill,hurt,newAug,joinRelay:c=>{myName=cleanText($('nameIn').value,16)||'Tester';startJoinRelay(c,'blocked');},startEvent,buildStruct,setLock,startRecall,progress,get events(){return events},get beacons(){return beacons},get structs(){return structs},get wells(){return wells},get strikes(){return strikes},get mines(){return mines},get env(){return env},set evT(v){evT=v}},get G(){return G},build(){btnBase.click();},doParty,doMenu,addGuestForTest(n,c){const q=mkPl(nextPlId++,n,c);pls.push(q);const s=spawnPoint();q.tank=mkPlayerTank(q,s.x,s.y);ents.push(q.tank);return q;}};
 })();
 </script>
 </body>
