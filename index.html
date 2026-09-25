@@ -174,7 +174,8 @@ button{font:inherit;color:inherit}
       <li>The map has eight regions around the hub. Capture a region's beacon by holding its ring for 12 seconds; it pays out and defends you.</li>
       <li>World events pop up every few minutes: convoys, meteor showers, rifts, and sieges. Contracts (C) give you goals and rewards.</li>
       <li>Build turrets, extractors, a refinery, and a repair pylon from your base or inventory. H teleports you home after 3 seconds standing still.</li>
-      <li>Legendaries: Singularity (Wardens), Orbital Lance (supply convoys), Particle Engine (anomaly shapes). Rift horrors can drop any of them.</li>
+      <li>Every zone has its own boss, tougher in each zone: from the Elder Thornback in the Meadow to the Hollow King in the Void. Bosses drop big loot and return after a few minutes.</li>
+      <li>Legendaries: Singularity (zone bosses, always from zones 7-9), Orbital Lance (supply convoys), Particle Engine (anomaly shapes). Rift horrors can drop any of them.</li>
       <li>The world has nine biome zones, each harder and richer than the last: Meadow, Dunes, Ocean, Tundra, Marsh, Caverns, Volcano, Storm, and Void. Each has its own hazards and enemies.</li>
       <li>Zones drop essence (colored diamonds). At your base, spend it to infuse an augment with that zone's power: frost chills, scorch burns, venom poisons, and more.</li>
       <li>Visit a zone's outpost to unlock it for warping (G) from any safe zone. Bases are heavy but movable: push, grapple, or tow them.</li>
@@ -206,14 +207,14 @@ const WEAPONS=['gun','laser','lightning','shredder','missiles','sword','beamswor
 // bay: can it go in a drone bay (at 25% strength)?
 const AUG={
   gun:{n:'Gun',ab:'GUN',cat:'weapon',size:1,bind:'pri',bay:1,ups:{dmg:'Damage',rate:'Fire rate',pierce:'Pierce'},craft:[0,30]},
-  laser:{n:'Laser',ab:'LSR',cat:'weapon',size:1,bat:1,bind:'auto',bay:1,ups:{power:'Power',beams:'Beam count',range:'Range'}},
+  laser:{n:'Laser',ab:'LSR',cat:'weapon',size:1,bat:1,bind:'auto',bay:1,ups:{power:'Power',defense:'Auto defense',range:'Range'}},
   lightning:{n:'Lightning',ab:'ZAP',cat:'weapon',size:1,bat:1,bind:'pri',bay:1,ups:{dmg:'Damage',chain:'Chains',rate:'Zap rate'}},
   missiles:{n:'Missile Pod',ab:'MSL',cat:'weapon',size:1,bind:'pri',bay:1,ups:{dmg:'Warhead',count:'Salvo size',rate:'Reload'},craft:[1,45]},
   drones:{n:'Drones',ab:'DRN',cat:'weapon',size:1,bind:'always',ups:{count:'Drone count',range:'Range',spd:'Speed'}},
   shredder:{n:'Shredder',ab:'SHR',cat:'weapon',size:1,bind:'always',bay:1,ups:{dmg:'Damage',cool:'Cooling',reach:'Reach'}},
   shield:{n:'Shield',ab:'SHD',cat:'defense',size:1,bind:'always',bay:1,ups:{cap:'Capacity',regen:'Recharge',delay:'Quick restart'},craft:[0,30]},
   healing:{n:'Healing',ab:'HEAL',cat:'defense',size:1,bind:'always',bay:1,ups:{rate:'Regen',burst:'Resting burst'},craft:[0,40]},
-  grapple:{n:'Grapple',ab:'HOOK',cat:'utility',size:1,bind:'f',ups:{range:'Range',pull:'Pull strength'}},
+  grapple:{n:'Grapple',ab:'HOOK',cat:'utility',size:1,bind:'f',ups:{range:'Range',pull:'Pull strength'},craft:[0,45]},
   stealth:{n:'Stealth',ab:'STL',cat:'utility',size:1,bind:'always',ups:{fade:'Fade speed',hide:'Concealment'}},
   engine:{n:'Engine',ab:'ENG',cat:'utility',size:1,bind:'always',bay:1,ups:{force:'Thrust',spd:'Top speed'},craft:[0,40]},
   dash:{n:'Dash Jets',ab:'DSH',cat:'utility',size:1,bind:'shift',ups:{cool:'Recharge',dist:'Distance'},craft:[1,40]},
@@ -224,13 +225,15 @@ const AUG={
   railgun:{n:'Railgun',ab:'RAIL',cat:'weapon',size:1,bat:1,bind:'pri',ups:{dmg:'Damage',charge:'Charge speed',range:'Range'}},
   mines:{n:'Mine Layer',ab:'MINE',cat:'weapon',size:1,bind:'q',ups:{dmg:'Blast',count:'Max mines',radius:'Radius'}},
   reflector:{n:'Reflector',ab:'RFL',cat:'defense',size:1,bind:'always',ups:{chance:'Reflect chance',power:'Return power'}},
-  clone:{n:'Shadow Clone',ab:'CLN',cat:'utility',size:1,bind:'r',ups:{dur:'Duration',count:'Clones',power:'Power'}},
+  clone:{n:'Shadow Clone',ab:'CLN',cat:'utility',size:1,bat:1,bind:'r',ups:{eff:'Energy efficiency',count:'Clones',power:'Power'}},
   singularity:{n:'Singularity',ab:'SNG',cat:'weapon',size:2,unique:1,bind:'e',ups:{pull:'Pull',dur:'Duration',dmg:'Crush damage'}},
   orbital:{n:'Orbital Lance',ab:'ORB',cat:'weapon',size:2,unique:1,bind:'q',ups:{dmg:'Damage',radius:'Blast radius',cool:'Recharge'}},
   particle:{n:'Particle Engine',ab:'PRT',cat:'weapon',size:3,unique:1,bind:'auto',ups:{count:'Particles',heat:'Heat damage',speed:'Intercept speed'}},
 };
+// every augment except Drones itself fits in a drone bay (drones use it at 25% strength, see droneAttack/updDrone)
+for(const k in AUG)if(k!=='drones')AUG[k].bay=1;
 // where each legendary comes from (shown in the help and on the item)
-const LEGEND_SRC={singularity:'Dropped by the Wardens',orbital:'Carried by supply convoys (world event)',particle:'Falls out of rare anomaly shapes'};
+const LEGEND_SRC={singularity:'Dropped by zone bosses (always from zones 7-9, sometimes from zones 4-6)',orbital:'Carried by supply convoys (world event)',particle:'Falls out of rare anomaly shapes'};
 // buttons an augment can be bound to (mouse + keyboard). Bits are sent over the network as one number.
 const BTN={lmb:1,rmb:2,space:4,shift:8,q:16,e:32,f:64,r:128,mmb:256};
 const BIND_OPTS=[['pri','Left click / Space'],['lmb','Left click'],['rmb','Right click'],['mmb','Middle click'],['space','Space'],['shift','Shift'],['q','Q'],['e','E'],['f','F'],['r','R'],['auto','Automatic'],['always','Always on']];
@@ -273,7 +276,12 @@ const MOD_OF_ZONE=ZONES.map(z=>z.mod);
 const SZ=[{x:HALF,y:HALF,r:300,n:'Hub'},{x:HALF,y:HALF-3400,r:240,n:'North post'},{x:HALF+3300,y:HALF+900,r:240,n:'East post'},
   {x:HALF-600,y:HALF+3600,r:240,n:'South post'},{x:HALF-3400,y:HALF+300,r:240,n:'West post'},
   ...ZONES.slice(1).map(z=>({x:z.cx,y:z.cy,r:260,n:z.n.split(' ').pop()+' Outpost',z:z.i}))];
-const BCS=[{x:ZONES[6].cx+3200,y:ZONES[6].cy-2600},{x:ZONES[8].cx-2800,y:ZONES[8].cy+3000}];
+// One unique boss per zone, in zone order. Each patrols a loop in its zone and gets tougher with the zone's difficulty.
+const BOSSES=[
+  {k:'oak',n:'The Elder Thornback'},{k:'worm',n:'Sandmaw Queen'},{k:'leviathan',n:'The Leviathan'},
+  {k:'colossus',n:'Frost Colossus'},{k:'bog',n:'Bog Mother'},{k:'prism',n:'Prism Sentinel'},
+  {k:'titan',n:'Magma Titan'},{k:'tempest',n:'Tempest Eye'},{k:'hollow',n:'The Hollow King'}];
+const BCS=ZONES.map(Z=>({x:Z.cx-3000,y:Z.cy+2800}));
 // one capturable beacon per zone outside the Meadow; d is the zone's difficulty (1-9)
 const REGIONS=[];for(let gi=0;gi<9;gi++){const z=ZONES[GRID2Z[gi]];REGIONS[gi]={n:z.n,d:z.d,z,b:z.i===0?null:{x:z.cx+2600,y:z.cy-2100}};}
 // base structures: cost is [[tier,amount],...]; 'where' is where your tank must be to build it
@@ -315,22 +323,24 @@ function costFor(n,uniq){let tier=Math.floor((n-1)/5);if(uniq)tier=Math.min(3,ti
 function refundOf(a){const r=[0,0,0,0];const u=!!AUG[a.type].unique;for(let n=2;n<=a.lvl;n++){const c=costFor(n,u);r[c.tier]+=c.amt;}return r;}
 function salvageOf(a){const d=AUG[a.type];const r=refundOf(a);if(d.unique)r[3]+=25;else if(d.craft)r[d.craft[0]]+=Math.round(d.craft[1]*.6);else r[0]+=20;
   if(a.bay)salvageOf(a.bay).forEach((v,i)=>r[i]+=v);return r;}
-// Laser rebalance: less damage per beam, falloff with distance, extra beams cost much more battery, and beams build heat.
-function laserStats(a){const s=k=>S(a,k);const beams=1+Math.min(4,s('beams'));
-  return {dps:16*(1+0.2*s('power')),beams,range:280+35*s('range'),bat:14*(1+0.5*(beams-1)),heat:5*beams};}
+// One main beam. Each Auto defense level adds a small defense beam (up to 4) that fires on its own at incoming
+// bullets first, then nearby enemies, all around you, even while you're aiming the main beam.
+function laserStats(a){const s=k=>S(a,k),def=Math.min(4,s('defense')),range=280+35*s('range'),dps=16*(1+0.2*s('power'));
+  return {dps,beams:1,range,bat:14,heat:5,def,defRange:Math.round(range*0.8),defDps:dps*0.6,defBullet:dps*4};}
 function swordStats(a){const s=k=>S(a,k),beam=a.type==='beamsword';
   return {len:(beam?78:52)+(beam?14:12)*s('size'),dmg:beam?26+9*s('dmg'):34+12*s('dmg'),cd:beam?0.45:0.6,lunge:160+70*s('lunge'),arc:1.1};}
 function droneRange(a,onBase){return (onBase?430:320)+60*S(a,'range');}
 function resStr(r){return r.map((v,i)=>v?`${v} ${TIER[i].n.toLowerCase()}`:'').filter(Boolean).join(', ')||'nothing';}
 function describe(a){const s=k=>S(a,k);switch(a.type){
   case 'gun':return `Damage ${11+3*s('dmg')}, reload ${(0.42*Math.pow(0.9,s('rate'))).toFixed(2)}s, pierces ${s('pierce')}. Fires while you hold aim.`;
-  case 'laser':{const L=laserStats(a);return `${Math.round(L.dps)} damage/s per beam up close, fading to 55% at max range ${L.range}. ${L.beams} beam${L.beams>1?'s':''}. Hold fire to aim the beam at your mouse; let go and it locks onto enemies in your aim cone by itself. Anything touching a beam gets burned. Drains ${Math.round(L.bat)} battery/s and builds heat.`;}
-  case 'sword':case 'beamsword':{const W0=swordStats(a);return `${a.type==='sword'?'Swings a heavy blade':'Swings a blade of light'} ${W0.len} long for ${W0.dmg} damage every ${W0.cd}s, lunging ${W0.lunge} forward. ${a.type==='sword'?'Knocks enemies back, and each swing bats bullets back at whoever fired them.':'Ignores armor. The blade is always live: anything touching it burns, and bullets that hit it are burned down or destroyed. Uses battery.'} Rests pointing forward between swings.`;}
+  case 'laser':{const L=laserStats(a);return `${Math.round(L.dps)} damage/s up close, fading to 55% at max range ${L.range}. Hold fire to aim the beam at your mouse; let go and it locks onto enemies in your aim cone by itself. Anything touching the beam gets burned. Drains ${Math.round(L.bat)} battery/s and builds heat.`+
+    (L.def?` Auto defense: ${L.def} extra beam${L.def>1?'s':''} fire on their own within ${L.defRange}, burning down incoming bullets first, then hitting nearby enemies for ${Math.round(L.defDps)}/s. Each active defense beam costs 4 battery/s.`:' Upgrade Auto defense to add beams that shoot down bullets and nearby enemies on their own.');}
+  case 'sword':case 'beamsword':{const W0=swordStats(a);return `${a.type==='sword'?'Swings a heavy blade':'Swings a blade of light'} ${W0.len} long for ${W0.dmg} damage every ${W0.cd}s, lunging ${W0.lunge} forward. ${a.type==='sword'?'Knocks enemies back. Bullets that hit the blade, resting or swinging, get batted back at whoever fired them.':'Ignores armor. The blade is always live: anything touching it burns, and bullets that hit it are burned down or destroyed. Uses battery.'} Rests pointing forward between swings.`;}
   case 'flamer':return `Sprays fire ${190+30*s('range')} ahead for ${28+9*s('dmg')} damage/s to everything in the cone, heating them by ${25+10*s('burn')}/s. Builds heat on you too.`;
   case 'railgun':return `Hold to charge (${(1.4*Math.pow(0.88,s('charge'))).toFixed(1)}s for full), release to fire a slug that pierces everything in a ${700+100*s('range')} line for up to ${60+25*s('dmg')} damage. Uses battery.`;
   case 'mines':return `Drops a mine behind you. Mines arm after half a second and blow up for ${55+20*s('dmg')} in a ${90+15*s('radius')} radius when an enemy gets close. Up to ${5+2*s('count')} at once.`;
   case 'reflector':return `${Math.round(100*Math.min(0.7,0.2+0.06*s('chance')))}% chance to bounce an incoming bullet back at ${Math.round(100*(0.8+0.1*s('power')))}% power.`;
-  case 'clone':return `Summons ${1+Math.floor(s('count')/2)} shadow clone${s('count')>=2?'s':''} of your tank for ${(6+1.5*s('dur')).toFixed(1)}s. They copy your weapons at ${Math.round(100*(0.3+0.08*s('power')))}% power and fight beside you. Recharges in 20s.`;
+  case 'clone':return `Press to toggle on or off. While on, keeps up to ${cloneMax(a)} shadow clone${cloneMax(a)>1?'s':''} of your tank fighting beside you with your weapons at ${Math.round(100*(0.3+0.08*s('power')))}% power; fallen clones come back after 2s. Each clone drains ${cloneDrain(a).toFixed(1)} battery/s. If your battery runs dry they vanish, and you can't turn them back on until you're at 20% battery.`;
   case 'lightning':return `${14+5*s('dmg')} per zap, jumps to ${2+s('chain')} targets every ${(1.1*Math.pow(0.9,s('rate'))).toFixed(2)}s. Uses battery.`;
   case 'missiles':return `Fires ${2+s('count')} homing missiles every ${(1.8*Math.pow(0.9,s('rate'))).toFixed(2)}s, ${16+5*s('dmg')} damage each.`;
   case 'drones':return `${2+s('count')} drones that collect drops within ${droneRange(a,false)} (${droneRange(a,true)} on a base), +${12*s('spd')}% speed. They only fight when an augment is in their drone bay, at 25% strength.${a.bay?` Bay: ${AUG[a.bay.type].n} Lv ${a.bay.lvl}.`:' Bay: empty.'}`;
@@ -410,7 +420,11 @@ function mkPlayerTank(pl,x,y){const t=mkTank({isPlayer:true,x,y,cargo:[],carry:[
   stats:{hp:0,def:0,bat:0,cool:0},pl,fill:pl.color,name:pl.name});applyStats(t);t.hp=t.maxHp;return t;}
 function spawnPoint(){const a=rnd()*TAU;return {x:wr(SZ[0].x+Math.cos(a)*90),y:wr(SZ[0].y+Math.sin(a)*90)};}
 function bossPoint(b,th){return {x:wr(b.c.x+Math.cos(th)*560),y:wr(b.c.y+Math.sin(th*2)*320)};}
-function mkBoss(c,i){const b=mk({kind:'boss',team:'e',c,x:0,y:0,r:70,mass:700,drag:2,hp:2600,maxHp:2600,def:5,fill:ECOL,th:i*Math.PI,ringT:2,shotT:1,kin:true,name:i?'The Warden II':'The Warden'});
+// zone z's boss: health, armor, size, and damage all scale with the zone's difficulty (1-9)
+function mkBoss(z){const Z=ZONES[z],B=BOSSES[z],d=Z.d,hp=Math.round(1400*(1+0.6*(d-1)));
+  const b=mk({kind:'boss',bt:B.k,z,team:'e',c:BCS[z],x:0,y:0,r:54+4*d,mass:500+60*d,drag:2,hp,maxHp:hp,def:d,fill:Z.en,th:z*0.7,t1:2,t2:3,t3:6,kin:true,
+    name:B.n,dmgMul:1+0.18*(d-1),native:z,beams:null,alpha:1});
+  if(B.k==='prism')b.reflect=true; // half the bullets that hit it glance off
   const p=bossPoint(b,b.th);b.x=p.x;b.y=p.y;return b;}
 // territory beacon: neutral until captured; owned beacons shoot at the owner's enemies and pay out resources
 function mkBeacon(ri){const R0=REGIONS[ri];return mk({kind:'beacon',ri,x:R0.b.x,y:R0.b.y,r:34,mass:1e6,static:true,team:'n',solid:true,hp:2400,maxHp:2400,def:4,
@@ -424,12 +438,20 @@ function mkConvoy(from,to){return mk({kind:'convoy',team:'e',x:from.x,y:from.y,r
 function mkBus(stops,startPos,dir){const z=SZ[stops[startPos]];const n=stops.length;return mk({kind:'bus',team:'bus',x:z.x,y:z.y,r:58,w:170,h:74,mass:900,drag:0,hp:6000,maxHp:6000,fill:BUSCOL,
   stops,pos:(startPos+dir+n)%n,dir,startPos,wait:3,rot:0,kin:true,dx:0,dy:0});}
 // shadow clone: a weak copy of a tank that fights for its owner for a few seconds
+// the pickup ring of a base, including any Magnet on it
+function basePickR(b){return b.pickR+(b.magR||0);}
 function mkClone(o,a,k){const pw=0.3+0.08*S(a,'power'),ang=o.aim+Math.PI/2+k*1.3;
   const augs=o.augs.filter(x=>WEAPONS.includes(x.type)||x.type==='shield').map(x=>{const c=cleanDrop(x);delete c.bay;return c;});
-  const c=mkTank({team:o.team,pl:o.pl,owner:o,isClone:true,x:wr(o.x+Math.cos(ang)*60),y:wr(o.y+Math.sin(ang)*60),r:o.r*0.9,mass:o.mass*0.8,force:o.force,
-    hp:o.maxHp*(0.3+0.12*S(a,'power')),maxHp:o.maxHp*(0.3+0.12*S(a,'power')),augs,slots:augs.length,fill:o.fill,dmgMul:pw*(o.dmgMul||1),life:6+1.5*S(a,'dur'),aim:o.aim,
-    name:o.name?o.name+'’s clone':''});
-  c.rammer=augs.some(x=>x.type==='shredder'||x.type==='sword'||x.type==='beamsword');return c;}
+  // a base can't walk, so its "clones" are mobile guard tanks carrying the base's weapons
+  const bs=!!o.isBase,hp=(bs?160:o.maxHp)*(0.3+0.12*S(a,'power'));
+  const c=mkTank({team:o.team,pl:o.pl,owner:o,isClone:true,x:wr(o.x+Math.cos(ang)*(bs?90:60)),y:wr(o.y+Math.sin(ang)*(bs?90:60)),r:bs?20:o.r*0.9,mass:bs?10:o.mass*0.8,force:bs?11500:o.force,
+    hp,maxHp:hp,augs,slots:augs.length,fill:o.fill,dmgMul:pw*(o.dmgMul||1),life:1e9,aim:o.aim,
+    name:bs?(o.pl?o.pl.name+'’s guard':''):o.name?o.name+'’s clone':''});
+  c.rammer=augs.some(x=>x.type==='shredder'||x.type==='sword'||x.type==='beamsword');c.srcAug=a;return c;}
+function cloneMax(a){return 1+S(a,'count');}
+function spawnClone(t,a,k){const c=mkClone(t,a,k);ents.push(c);fx.push({k:'boom',x:c.x,y:c.y,r:c.r,col:'#8b8fa3',life:.5,t:0,big:true});return c;}
+// battery each active clone costs per second; Energy efficiency cuts it by 15% a level
+function cloneDrain(a){return 4*Math.pow(0.85,S(a,'eff'));}
 
 // ================= world gen =================
 // Everything here uses the seeded R, so every browser (host and guests) builds the same world, including the
@@ -461,7 +483,7 @@ function genZone(z){const Z=ZONES[z],c={x:Z.cx,y:Z.cy};
 function genWorld(){
   for(let z=0;z<9;z++)genZone(z);
   for(let i=0;i<45*9;i++)spawnMini(true);
-  BCS.forEach((c,i)=>{const b=mkBoss(c,i);bosses.push(b);ents.push(b);});
+  ZONES.forEach((Z,z)=>{const b=mkBoss(z);bosses.push(b);ents.push(b);});
   // two shuttles loop the Meadow's posts, two more loop the outposts of the outer zones
   const outer=SZ.map((s,i)=>i).filter(i=>i>=5);
   buses.push(mkBus([0,1,2,3,4],0,1),mkBus([0,1,2,3,4],2,-1),mkBus(outer,0,1),mkBus(outer,4,-1));ents.push(...buses);
@@ -538,8 +560,9 @@ function kill(e,src){
       if(e.elite){dropAug(e,newAug(pickLegend(),1));toastNear(e,'The rift horror collapses, leaving something legendary behind.');eventDone(e.ev,kp);}
       e.drones.forEach(d=>d.dead=true);if(!e.elite&&!e.siege&&!e.guard)miniQueue.push(25);break;
     case 'base':killBase(e,k);break;
-    case 'boss':e.down=120;e.solid=false;dropAug(e,newAug('singularity'));dropRes(e,3,6,5);dropRes(e,2,6,5);boom(e,null,true);
-      toastNear(e,`${e.name} is down. It will return to its route.`);break;
+    case 'boss':e.down=120+15*ZONES[e.z].d;e.solid=false;e.dive=0;e.alpha=1;bossLoot(e);boom(e,null,true);
+      for(const x of ents)if(x.bossKid===e&&!x.dead)x.dead=true;
+      announce(`${kp?kp.name+' defeated':'Someone defeated'} ${e.name}, boss of ${ZONES[e.z].n}. It returns in a few minutes.`);break;
     case 'bus':e.down=25;e.solid=false;boom(e,null,true);toastAll('A transit shuttle was destroyed');break;
     case 'beacon':{const was=e.pl;neutralBeacon(e);boom(e,null,true);
       if(was)toastAll(`${REGIONS[e.ri].n} was knocked loose from ${was.name}'s party`);break;}
@@ -601,9 +624,12 @@ function updTank(t,dt){
   // taps that arrived between steps still count for one step
   if(inp.latch){inp.btns|=inp.latch;inp.latch=0;inp.fire=inp.fire||(inp.btns&(BTN.lmb|BTN.space))!==0;}
   t.hurtT+=dt;t.lastFire+=dt;if(t.inv>0)t.inv-=dt;
-  if((inp.fire||(inp.btns&~BTN.shift))&&!t.aboard)t.lastFire=0;
+  // stealth breaks when you attack; a base with no weapons never counts as attacking
+  if((inp.fire||(inp.btns&~BTN.shift))&&!t.aboard&&(!t.isBase||t.augs.some(a=>WEAPONS.includes(a.type)||a.type==='drones')))t.lastFire=0;
   let force=t.force,drag=t.drag0;const engs=augsOf(t,'engine');
   for(const a of engs){force*=1.25+0.12*S(a,'force');drag*=Math.pow(0.93,S(a,'spd')+1);}
+  // a base can't drive, so engines power its pickup ring and its drones instead
+  if(t.isBase){let em=1;for(const a of engs)em*=1.25+0.12*S(a,'force');t.engMul=em;}
   const zk=ZONES[zoneAt(t)].k,local=t.native===zoneAt(t);
   if(zk==='ocean'&&!local)drag*=0.55; // slippery water
   t.drag=drag;
@@ -611,7 +637,12 @@ function updTank(t,dt){
   // dash jets: a short burst in the move direction (or the aim, when standing still); untouchable while it lasts
   if(t.dashCd>0)t.dashCd-=dt;
   const dj=augsOf(t,'dash')[0];
-  if(dj&&!t.aboard&&t.dashCd<=0&&pressed(t,dj)){const ang=m>0.2?Math.atan2(inp.my,inp.mx):t.aim;const len=260+60*S(dj,'dist');
+  // on a base, dash jets fire a shockwave that shoves away enemies that get too close
+  if(dj&&t.isBase){if(t.dashCd<=0){const near=act.filter(e=>e!==t&&e.team!=='n'&&!e.static&&!e.kin&&foe(t.team,t.pl,e)&&dist(t,e)<t.r+e.r+140);
+      if(near.length){t.dashCd=2*Math.max(1.5,5-0.5*S(dj,'cool'));const pw=260+60*S(dj,'dist');
+        for(const e of near){const an=angTo(t,e),f=pw*3/Math.sqrt(e.mass||1);e.vx+=Math.cos(an)*f;e.vy+=Math.sin(an)*f;hurt(e,10+2*S(dj,'dist'),t,angTo(e,t),dj.mod);}
+        fx.push({k:'boom',x:t.x,y:t.y,r:t.r+20,col:'#ffd27a',life:.6,t:0,big:true});}}}
+  else if(dj&&!t.aboard&&t.dashCd<=0&&pressed(t,dj)){const ang=m>0.2?Math.atan2(inp.my,inp.mx):t.aim;const len=260+60*S(dj,'dist');
     t.dashT=0.18;t.dashV={x:Math.cos(ang)*len/0.18,y:Math.sin(ang)*len/0.18};t.dashCd=Math.max(1.5,5-0.5*S(dj,'cool'));dj._cd=t.dashCd;
     fx.push({k:'boom',x:t.x,y:t.y,r:t.r,col:t.fill,life:.3,t:0});}
   if(t.dashT>0){t.dashT-=dt;t.vx=t.dashV.x;t.vy=t.dashV.y;if(rnd()<dt*60)fx.push({k:'puff',x:t.x,y:t.y,vx:0,vy:0,life:.3,t:0,col:t.fill});
@@ -646,15 +677,17 @@ function updTank(t,dt){
     const gi=guns.indexOf(a);t.reload[gi]-=dt;
     if(held(t,a)&&t.reload[gi]<=0){fireBullet(t,t.aim+off,11+3*S(a,'dmg'),580,S(a,'pierce'),5+augTier(a)).mod=a.mod;
       t.reload[gi]=0.42*Math.pow(0.9,S(a,'rate'))*(0.9+rnd()*0.2);}}
-  // Lasers: while you fire, the beams go where you aim (the mouse). When you're not firing they lock onto
-  // enemies in your aim cone by themselves, as before. Either way the whole beam burns whatever it touches.
+  // Lasers: one main beam. While you fire it goes where you aim (the mouse); when you're not firing it locks onto
+  // the nearest enemy in your aim cone. The whole beam burns whatever it touches. Auto defense beams run on their own.
   for(const a of augsOf(t,'laser')){a._on=false;
     const L=laserStats(a),b=bindOf(a),manual=b==='auto'?!!inp.fire:held(t,a);if(t.bat<=0.5)continue;
-    a._beams=[];
-    if(manual){for(let k=0;k<L.beams;k++){const ang=t.aim+(k-(L.beams-1)/2)*0.06;a._beams.push({ang,len:L.range});beamHit(t,ang,L.range,L,dt,a.mod,true);}}
-    else{const tg=coneTargets(t,L.range,false);if(!tg.length)continue;
-      for(let k=0;k<L.beams;k++){const e=tg[k%tg.length].e;const ang=angTo(t,e),len=Math.max(0,dist(t,e)-e.r*0.6);a._beams.push({e,ang,len});beamHit(t,ang,len+e.r,L,dt,a.mod,false);}}
-    t.bat=Math.max(0,t.bat-L.bat*dt);t.heat+=L.heat*(a.mod==='frost'?0.5:1)*dt;t.lastFire=0;a._on=true;}
+    a._beams=[];let main=false;
+    if(manual){a._beams.push({ang:t.aim,len:L.range});beamHit(t,t.aim,L.range,L,dt,a.mod,true);main=true;}
+    else{const tg=coneTargets(t,L.range,false);if(tg.length){const e=tg[0].e,ang=angTo(t,e),len=Math.max(0,dist(t,e)-e.r*0.6);
+      a._beams.push({e,ang,len});beamHit(t,ang,len+e.r,L,dt,a.mod,false);main=true;}}
+    const nd=L.def?laserDefense(t,a,L,dt):0;
+    if(!main&&!nd)continue;
+    t.bat=Math.max(0,t.bat-((main?L.bat:0)+4*nd)*dt);t.heat+=((main?L.heat:0)+1.5*nd)*(a.mod==='frost'?0.5:1)*dt;if(main)t.lastFire=0;a._on=true;}
   // missile pods: a salvo of homing missiles
   for(const a of augsOf(t,'missiles')){a._cd=Math.max(0,(a._cd||0)-dt);
     if(held(t,a)&&a._cd<=0){const n=2+S(a,'count');a._cd=1.8*Math.pow(0.9,S(a,'rate'));
@@ -673,17 +706,31 @@ function updTank(t,dt){
     if(release){if(a._ch>0.2)fireRail(t,a,(60+25*S(a,'dmg'))*a._ch,700+100*S(a,'range'));a._ch=0;a._cd=0.35;}}
   // mine layer: drop armed mines behind you
   for(const a of augsOf(t,'mines')){a._cd=Math.max(0,(a._cd||0)-dt);
-    if(held(t,a)&&a._cd<=0){a._cd=0.9;const back=t.aim+Math.PI;
-      mines.push({x:wr(t.x+Math.cos(back)*(t.r+14)),y:wr(t.y+Math.sin(back)*(t.r+14)),team:t.team,pl:t.pl,owner:t,arm:0.6,dmg:55+20*S(a,'dmg'),rad:90+15*S(a,'radius'),life:90,col:t.fill,mod:a.mod});
-      const mine=mines.filter(m=>m.owner===t),max=5+2*S(a,'count');if(mine.length>max){const old=mine[0];mines.splice(mines.indexOf(old),1);}}}
+    if(held(t,a)&&a._cd<=0){a._cd=0.9;
+      // tanks drop mines behind them; a base seeds them in a ring on the side the enemy is coming from
+      const back=t.isBase?t.aim+(rnd()-.5)*1.2:t.aim+Math.PI,off=t.isBase?t.r+60+rnd()*60:t.r+14;
+      mines.push({x:wr(t.x+Math.cos(back)*off),y:wr(t.y+Math.sin(back)*off),team:t.team,pl:t.pl,owner:t,arm:0.6,dmg:55+20*S(a,'dmg'),rad:90+15*S(a,'radius'),life:90,col:t.fill,mod:a.mod});
+      const mine=mines.filter(m=>m.owner===t&&!m.drone),max=5+2*S(a,'count');if(mine.length>max){const old=mine[0];mines.splice(mines.indexOf(old),1);}}}
   // shadow clone: summon weak copies of yourself that fight for a few seconds
-  for(const a of augsOf(t,'clone')){a._cd=Math.max(0,(a._cd||0)-dt);
-    if(pressed(t,a)&&a._cd<=0&&!t.isClone){a._cd=20;const n=1+Math.floor(S(a,'count')/2);
-      for(let k=0;k<n;k++){const c=mkClone(t,a,k-(n-1)/2);ents.push(c);fx.push({k:'boom',x:c.x,y:c.y,r:c.r,col:'#8b8fa3',life:.5,t:0,big:true});}}}
+  // Shadow clones are a toggle. Players press to switch them on/off; bases and AI tanks keep them on while fighting.
+  // While on they drain battery; an empty battery switches them off until it's back to 20%.
+  for(const a of augsOf(t,'clone')){a._cd=0;if(t.isClone)continue;
+    const n=cloneMax(a),cl=ents.filter(e=>e.isClone&&!e.dead&&e.srcAug===a),ready=t.bat>=0.2*t.batMax;
+    if(a._lock&&ready)a._lock=false;
+    const was=!!a._act;
+    if(t.isPlayer){if(pressed(t,a)){if(a._act)a._act=false;else if(a._lock)toastTo(t.pl,'Shadow clones need 20% battery to come back');else a._act=true;}}
+    else a._act=held(t,a)&&!a._lock;
+    if(a._act&&!t.aboard){
+      if(!was){for(let k=cl.length;k<n;k++)spawnClone(t,a,k-(n-1)/2);a._re=2;} // switching on summons the whole squad
+      else if(cl.length<n){a._re=(a._re||0)-dt;if(a._re<=0){a._re=2;spawnClone(t,a,0);}} // fallen clones return one at a time
+      t.bat-=cloneDrain(a)*cl.length*dt;
+      if(t.bat<=0){t.bat=0;a._act=false;a._lock=true;if(t.isPlayer)toastTo(t.pl,'Battery empty: your shadow clones fade until you recharge to 20%');}}
+    if(!a._act&&cl.length)for(const c of cl){c.dead=true;fx.push({k:'boom',x:c.x,y:c.y,r:c.r,col:'#8b8fa3',life:.4,t:0});}}
   // singularity: throw a gravity well toward the aim
   for(const a of augsOf(t,'singularity')){a._cd=Math.max(0,(a._cd||0)-dt);
-    if(pressed(t,a)&&a._cd<=0){a._cd=9;const c=Math.cos(t.aim),s=Math.sin(t.aim);
-      wells.push({x:wr(t.x+c*(t.r+20)),y:wr(t.y+s*(t.r+20)),vx:c*620,vy:s*620,fly:0.55,life:3+0.5*S(a,'dur'),pull:1+0.3*S(a,'pull'),dps:25+10*S(a,'dmg'),owner:t,team:t.team,pl:t.pl,t:0});}}
+    if(pressed(t,a)&&a._cd<=0){a._cd=9;const p=aimPoint(t,340,340),L=Math.max(40,dist(t,p)),an=angTo(t,p),c=Math.cos(an),s=Math.sin(an);
+      // it flies to the cursor (or the target, for AI and bases) and opens there
+      wells.push({x:wr(t.x+c*(t.r+20)),y:wr(t.y+s*(t.r+20)),vx:c*620,vy:s*620,fly:Math.max(0.05,(L-t.r-20)/620),life:3+0.5*S(a,'dur'),pull:1+0.3*S(a,'pull'),dps:25+10*S(a,'dmg'),owner:t,team:t.team,pl:t.pl,t:0});}}
   // orbital lance: mark the aim point, the strike lands a second later
   for(const a of augsOf(t,'orbital')){a._cd=Math.max(0,(a._cd||0)-dt);
     if(pressed(t,a)&&a._cd<=0){a._cd=Math.max(5,12-S(a,'cool'));const p=aimPoint(t,700,360);
@@ -698,12 +745,26 @@ function updTank(t,dt){
     else a._h=null;
     if(a._h){const h=a._h;const dx=wd(t.x,h.x),dy=wd(t.y,h.y),d=Math.hypot(dx,dy)||1;
       if(d>t.r+h.r+6){const nx=dx/d,ny=dy/d;const it=invMass(t),ih=invMass(h);
-        t.vx+=nx*pull*it*dt;t.vy+=ny*pull*it*dt;h.vx-=nx*pull*ih*dt;h.vy-=ny*pull*ih*dt;}}}
+        // a base reels its catch in without being dragged itself
+        if(!t.isBase){t.vx+=nx*pull*it*dt;t.vy+=ny*pull*it*dt;}h.vx-=nx*pull*ih*dt;h.vy-=ny*pull*ih*dt;}}}
   inp.prev=inp.btns;inp.prevFire=inp.fire;
 }
 // Is this augment's button down? AI tanks and touch players hold every button while firing. 'always' fires nonstop.
 function held(t,a){const b=bindOf(a);if(b==='always')return true;if(b==='auto')return !!t.input.fire;return (t.input.btns&bindBits(b))!==0;}
-function pressed(t,a){const bits=bindBits(bindOf(a));if(!bits)return !!t.input.fire&&!(t.input.prevFire);return (t.input.btns&bits)!==0&&(t.input.prev&bits)===0;}
+// A fresh press for players. Bases, AI tanks, and clones just hold their buttons while fighting,
+// so for them "pressed" means "firing" (each ability's cooldown keeps it from spamming).
+function pressed(t,a){if(!t.isPlayer)return held(t,a);const bits=bindBits(bindOf(a));if(!bits)return !!t.input.fire&&!(t.input.prevFire);return (t.input.btns&bits)!==0&&(t.input.prev&bits)===0;}
+// Laser auto defense: small beams that pick the closest incoming bullets first, then the closest enemies,
+// in every direction. Returns how many beams fired (for battery and heat).
+function laserDefense(t,a,L,dt){const me0={team:t.team,pl:t.pl,owner:t},R=L.defRange,tg=[];
+  for(const b of bullets){if(b.gone||!bulletFoe(me0,b))continue;const d=dist(t,b);if(d<R)tg.push({b,d});}
+  tg.sort((x,y)=>x.d-y.d);const picks=tg.slice(0,L.def);
+  if(picks.length<L.def){const es=[];for(const e of act){if(e.team==='n'||!hostile(t,e))continue;const d=dist(t,e);if(d<R+e.r)es.push({e,d});}
+    es.sort((x,y)=>x.d-y.d);for(const x of es){if(picks.length>=L.def)break;picks.push(x);}}
+  for(const p of picks){if(p.b){const b=p.b;b.hp=(b.hp??b.dmg)-L.defBullet*dt;if(b.hp<=0.01){b.gone=true;fx.push({k:'spark',x:b.x,y:b.y,life:.2,t:0,col:'#bff6ff'});}else b.dmg=b.hp;
+      a._beams.push({ang:angTo(t,b),len:p.d,d:1});}
+    else{const e=p.e;hurt(e,L.defDps*dt,t,angTo(e,t),a.mod);a._beams.push({ang:angTo(t,e),len:Math.max(0,p.d-e.r*0.6),d:1});}}
+  return picks.length;}
 // Damage everything touching a beam from t along ang. direct: aimed by the player, so it can hit anyone it's allowed
 // to (including rocks and non-party players); otherwise only things the tank's auto systems would target.
 function beamHit(t,ang,len,L,dt,mod,direct){const c=Math.cos(ang),s=Math.sin(ang);
@@ -721,8 +782,8 @@ function updSwords(t,dt){
     if(!a._sw&&a._cd<=0&&held(t,a)&&(!beam||t.bat>=6)){a._side=-(a._side||1);const from=t.aim-a._side*W0.arc,to=t.aim+a._side*W0.arc;
       a._sw={t:0,dur:0.2,from,to,last:from,hit:new Set()};a._cd=W0.cd;t.lastFire=0;
       if(beam){t.bat-=6;t.heat+=a.mod==='frost'?2:4;}
-      if(!t.static){const k=W0.lunge*(t.isPlayer?1:0.6);t.vx+=Math.cos(t.aim)*k;t.vy+=Math.sin(t.aim)*k;}}
-    if(!a._sw){a._ang=t.aim;if(beam)bladeBurn(t,a,W0,dt);continue;}
+      if(!t.static&&!t.isBase){const k=W0.lunge*(t.isPlayer?1:0.6);t.vx+=Math.cos(t.aim)*k;t.vy+=Math.sin(t.aim)*k;}}
+    if(!a._sw){a._ang=t.aim;if(beam)bladeBurn(t,a,W0,dt);else bladeDeflect(t,a,W0);continue;}
     const sw=a._sw;sw.t+=dt;const k=Math.min(1,sw.t/sw.dur),cur=sw.from+(sw.to-sw.from)*k;
     const mid=(sw.last+cur)/2,half=Math.abs(cur-sw.last)/2+0.12,reach=t.r+W0.len;
     for(const e of act){if(e===t||sw.hit.has(e)||e.owner===t||(t.owner&&(e===t.owner||e.owner===t.owner))||!foe(t.team,t.pl,e))continue;
@@ -750,6 +811,12 @@ function bladeBurn(t,a,W0,dt){if(t.bat<=0.5||t.aboard)return;const c=Math.cos(a.
   for(const b of bullets){if(b.gone||b._cut===a||!bulletFoe(me0,b))continue;const dx=wd(t.x,b.x),dy=wd(t.y,b.y),along=dx*c+dy*s;
     if(along<t.r-b.r||along>t.r+W0.len+b.r||Math.abs(-dx*s+dy*c)>b.r+6)continue;cutBullet(b,a,W0.dmg);touching=true;}
   if(touching){t.bat=Math.max(0,t.bat-4*dt);t.lastFire=0;}}
+// The steel blade works as a shield even at rest: bullets that hit it bounce straight back as your own shots.
+function bladeDeflect(t,a,W0){if(t.aboard)return;const c=Math.cos(a._ang),s=Math.sin(a._ang),me0={team:t.team,pl:t.pl,owner:t};
+  for(const b of bullets){if(b.gone||!bulletFoe(me0,b))continue;const dx=wd(t.x,b.x),dy=wd(t.y,b.y),along=dx*c+dy*s;
+    if(along<t.r-b.r||along>t.r+W0.len+b.r||Math.abs(-dx*s+dy*c)>b.r+6)continue;
+    b.vx=-b.vx;b.vy=-b.vy;b.team=t.team;b.pl=t.pl||null;b.owner=t;b.col=t.pl?t.pl.color:'#ff7b80';b.tg=null;b.life=Math.max(b.life,0.8);b.hits=null;
+    fx.push({k:'spark',x:b.x,y:b.y,life:.2,t:0,col:'#ffffff'});}}
 // The beam sword damages a bullet once per contact (bullet health = its damage): weak shots vanish,
 // strong ones come through weakened.
 function cutBullet(b,a,dmg){b._cut=a;b.hp=(b.hp??b.dmg)-dmg;if(b.hp<=0.01)b.gone=true;else b.dmg=b.hp;
@@ -761,7 +828,7 @@ function fireRail(t,a,dmg,len){const c=Math.cos(t.aim),s=Math.sin(t.aim);
   // the slug also punches through bullets in its path
   for(const b of bullets){if(b.gone||!bulletFoe({team:t.team,pl:t.pl,owner:t},b))continue;const dx=wd(t.x,b.x),dy=wd(t.y,b.y),along=dx*c+dy*s;
     if(along>0&&along<len&&Math.abs(-dx*s+dy*c)<10)b.gone=true;}
-  t.vx-=c*120;t.vy-=s*120;t.lastFire=0;
+  if(!t.isBase){t.vx-=c*120;t.vy-=s*120;}t.lastFire=0;
   fx.push({k:'rail',a:{x:wr(t.x+c*t.r),y:wr(t.y+s*t.r)},b:{x:wr(t.x+c*len),y:wr(t.y+s*len)},col:t.team==='p'?(t.pl?t.pl.color:'#bfe6ff'):'#ff9fb2',life:.35,t:0});}
 function updMines(dt){for(const m of mines){m.life-=dt;if(m.arm>0){m.arm-=dt;continue;}if(m.life<=0){m.done=true;continue;}
     let trig=false;for(const e of act){if(e.team==='n'||e.kind==='bus'||!e.solid||e.dead||e.down||!foe(m.team,m.pl,e)||e===m.owner)continue;if(dist(e,m)<40+e.r){trig=true;break;}}
@@ -771,7 +838,7 @@ function updMines(dt){for(const m of mines){m.life-=dt;if(m.arm>0){m.arm-=dt;con
       if(!e.static&&!e.kin){const an=angTo(m,e),f=260/Math.sqrt(e.mass||1);e.vx+=Math.cos(an)*f;e.vy+=Math.sin(an)*f;}}}
   mines=mines.filter(m=>!m.done);}
 // where the player is pointing in the world: the mouse position if we have it, otherwise a point ahead of the aim
-function aimPoint(t,maxD,def){const i=t.input;if(i.hasMouse){const dx=wd(t.x,i.wx),dy=wd(t.y,i.wy),d=Math.hypot(dx,dy);
+function aimPoint(t,maxD,def){const i=t.input;if(!i.hasMouse&&i.tdist>0)def=Math.min(def,i.tdist);if(i.hasMouse){const dx=wd(t.x,i.wx),dy=wd(t.y,i.wy),d=Math.hypot(dx,dy);
     if(d<=maxD)return {x:wr(i.wx),y:wr(i.wy)};return {x:wr(t.x+dx/d*maxD),y:wr(t.y+dy/d*maxD)};}
   return {x:wr(t.x+Math.cos(t.aim)*def),y:wr(t.y+Math.sin(t.aim)*def)};}
 // Each Drones augment keeps its own squad (d.src) and has one drone bay slot (a.bay).
@@ -788,7 +855,9 @@ function maintainDrones(t,dt){
 }
 function steerTo(e,tx,ty,spd,dt,k){const dx=wd(e.x,tx),dy=wd(e.y,ty),d=Math.hypot(dx,dy)||1;const s=Math.min(spd,d*6);
   e.vx+=(dx/d*s-e.vx)*Math.min(1,dt*(k||5));e.vy+=(dy/d*s-e.vy)*Math.min(1,dt*(k||5));}
-const BAY_ARMED=['gun','laser','lightning','missiles','shredder','flamer'];
+// bay augments that make drones go looking for a fight (the rest are support: shield, healing, engine, magnet, stealth, dash, reflector)
+const BAY_ARMED=['gun','laser','lightning','missiles','shredder','flamer','sword','beamsword','railgun','mines','grapple','singularity','orbital','particle','clone'];
+const BAY_MELEE=['shredder','sword','beamsword'];
 // may a player's drones be sent after this? anything but their own side (neutral resources count)
 function lockable(o,e){return !!e&&!e.dead&&!e.down&&e.solid&&e.kind!=='bus'&&!(e.kind==='beacon'&&!e.pl)&&(e.team==='n'||foe(o.team,o.pl,e));}
 function nearestRes(from,range){let res=null,bd=range;for(const p of pickups){if(p.k==='aug'||p.gone||(p.claimed&&!p.claimed.dead))continue;const dd=dist(from,p);if(dd<bd){bd=dd;res=p;}}return res;}
@@ -796,17 +865,22 @@ function updDrone(d,dt){
   const o=d.owner,a=d.src;if(!o||o.dead||o.down||!a||!o.augs.includes(a)){d.dead=true;return;}
   const bay=a.bay,bt=bay?bay.type:null,armed=BAY_ARMED.includes(bt);
   const squad=o.drones.filter(x=>x.src===a),n=Math.max(1,squad.length),idx=Math.max(0,squad.indexOf(d));
-  const spd=260*(1+0.12*S(a,'spd'))*(bt==='engine'?1.1+0.03*S(bay,'force'):1),range=droneRange(a,o.isBase);
+  const spd=260*(1+0.12*S(a,'spd'))*(bt==='engine'?1.1+0.03*S(bay,'force'):1)*(o.isBase?o.engMul||1:1),range=droneRange(a,o.isBase);
+  // support bays: stealth hides the drones, magnet widens what they collect
+  d.alpha=bt==='stealth'?0.3:1;const magB=bt==='magnet'?0.25*(120+45*S(bay,'radius')):0;
   // orders: a locked target or point, then whatever the mouse is over, then the nearest threat
   const pl=o.isPlayer?o.pl:null;let tgt=null,anchor=o;
   if(pl&&pl.lock){if(pl.lock.e){if(lockable(o,pl.lock.e))tgt=pl.lock.e;else pl.lock=null;}else anchor=pl.lock;}
   if(!tgt&&pl&&pl.hover&&lockable(o,pl.hover)&&dist(o,pl.hover)<range+200)tgt=pl.hover;
   if(!tgt&&armed){tgt=nearestHostile(d,anchor,anchor===o?range:240,null,true);
     if(!tgt&&d.team==='p'&&(o.isBase||o.input.fire||anchor!==o)){let bd=anchor===o?range:240;for(const e of act){if(e.kind==='chunk'&&!e.dead){const dd=dist(anchor,e);if(dd<bd){bd=dd;tgt=e;}}}}}
-  const res=!tgt&&d.team==='p'?(d.res&&!d.res.gone?d.res:nearestRes(anchor,anchor===o?range:260)):null;
+  const res=!tgt&&d.team==='p'?(d.res&&!d.res.gone?d.res:nearestRes(anchor,(anchor===o?range:260)+magB)):null;
   if(res){res.claimed=d;d.res=res;}else d.res=null;
   if(bt==='healing'&&o.hp<o.maxHp&&dist(d,o)<200)o.hp=Math.min(o.maxHp,o.hp+0.25*(2+1.5*S(bay,'rate'))*dt);
-  if(tgt){const orbit=bt==='shredder'?tgt.r+d.r+2:tgt.r+45,ang=T*2+d.id;
+  // dash jets: short bursts toward whatever the drone is going after
+  if(bt==='dash'){d.dc=(d.dc||0)-dt;const g=tgt||res;if(g&&d.dc<=0&&dist(d,g)>60){d.dc=Math.max(1.5,5-0.5*S(bay,'cool'));const an=angTo(d,g),v=0.25*(260+60*S(bay,'dist'))/0.18;
+    d.vx=Math.cos(an)*v;d.vy=Math.sin(an)*v;fx.push({k:'puff',x:d.x,y:d.y,vx:0,vy:0,life:.3,t:0,col:d.fill});}}
+  if(tgt){const orbit=BAY_MELEE.includes(bt)?tgt.r+d.r+2:tgt.r+45,ang=T*2+d.id;
     steerTo(d,wr(tgt.x+Math.cos(ang)*orbit),wr(tgt.y+Math.sin(ang)*orbit),spd,dt);d.rot=angTo(d,tgt);d.cd-=dt;
     if(armed)droneAttack(d,o,bay,tgt,dt);}
   else if(res){steerTo(d,res.x,res.y,spd*1.2,dt);d.rot=Math.atan2(d.vy,d.vx);
@@ -828,7 +902,23 @@ function droneAttack(d,o,bay,tgt,dt){const s=k=>S(bay,k),dd=dist(d,tgt),md=bay.m
     case 'lightning':if(d.cd<=0&&dd<240){d.cd=1.1*Math.pow(0.9,s('rate'));let prev=d,cur=tgt;const hit=new Set();
       for(let k=0;k<1+Math.floor(s('chain')/2)&&cur;k++){hit.add(cur);hurt(cur,0.25*(14+5*s('dmg')),d,undefined,md);fx.push({k:'bolt',a:{x:prev.x,y:prev.y},b:{x:cur.x,y:cur.y},life:.16,t:0,col:d.team==='p'?'#9fe8ff':'#ffb3c0'});
         prev=cur;cur=nearestHostile(d,cur,180,hit,true);}}break;
-    case 'shredder':if(dd<tgt.r+d.r+16){hurt(tgt,0.25*(25+10*s('dmg'))*dt,d,undefined,md);if(rnd()<dt*20)fx.push({k:'spark',x:d.x,y:d.y,life:.25,t:0,col:'#ffd27a'});}break;}}
+    case 'shredder':if(dd<tgt.r+d.r+16){hurt(tgt,0.25*(25+10*s('dmg'))*dt,d,undefined,md);if(rnd()<dt*20)fx.push({k:'spark',x:d.x,y:d.y,life:.25,t:0,col:'#ffd27a'});}break;
+    case 'sword':case 'beamsword':{const W0=swordStats(bay),beam=bay.type==='beamsword';if(dd>tgt.r+d.r+W0.len*0.5+6)break;
+      if(beam)hurt(tgt,0.25*W0.dmg*0.9*(1+0.1*(tgt.def||0))*dt,d,undefined,md); // a live blade burns on contact
+      if(d.cd<=0){d.cd=W0.cd;hurt(tgt,0.25*W0.dmg*(beam?1+0.1*(tgt.def||0):1),d,angTo(tgt,d),md);fx.push({k:'spark',x:tgt.x,y:tgt.y,life:.25,t:0,col:beam?'#bff6ff':'#ffffff'});
+        if(!beam&&!tgt.static&&!tgt.kin){const an=angTo(d,tgt),f=85/Math.sqrt(tgt.mass||1);tgt.vx+=Math.cos(an)*f;tgt.vy+=Math.sin(an)*f;}}break;}
+    case 'railgun':if(d.cd<=0&&dd<520){d.cd=2.4*Math.pow(0.88,s('charge'));d.aim=angTo(d,tgt);fireRail(d,bay,0.25*(60+25*s('dmg')),520);}break;
+    case 'mines':if(d.cd<=0&&dd<220){d.cd=3;const mine=mines.filter(m=>m.drone===d);if(mine.length>=2)mines.splice(mines.indexOf(mine[0]),1);
+      mines.push({x:d.x,y:d.y,team:d.team,pl:d.pl,owner:o,drone:d,arm:0.6,dmg:0.25*(55+20*s('dmg')),rad:0.7*(90+15*s('radius')),life:40,col:d.fill,mod:md});}break;
+    case 'grapple':if(dd<320&&!tgt.static&&!tgt.kin){const pull=0.25*(9000+3000*s('pull')),an=angTo(tgt,o),ih=invMass(tgt);tgt.vx+=Math.cos(an)*pull*ih*dt;tgt.vy+=Math.sin(an)*pull*ih*dt;
+      if(d.cd<=0){d.cd=0.1;fx.push({k:'ray',a:{x:d.x,y:d.y},b:{x:tgt.x,y:tgt.y},col:'#c9ced4',life:.12,t:0});}}break;
+    case 'singularity':if(d.cd<=0&&dd<420){d.cd=18;wells.push({x:tgt.x,y:tgt.y,vx:0,vy:0,fly:0,life:0.5*(3+0.5*s('dur')),pull:0.25*(1+0.3*s('pull')),dps:0.25*(25+10*s('dmg')),owner:d,team:d.team,pl:d.pl,t:0,rw:150});}break;
+    case 'orbital':if(d.cd<=0&&dd<500){d.cd=1.5*Math.max(5,12-s('cool'));strikes.push({x:tgt.x,y:tgt.y,t:1,r:0.6*(100+15*s('radius')),dmg:0.25*(160+45*s('dmg')),owner:d,team:d.team,pl:d.pl});}break;
+    case 'particle':if(dd<220){const dps=0.125*(24+4*s('count'))*4.5*(1+.25*s('heat'));hurt(tgt,dps*dt,d,undefined,md);tgt.heat=(tgt.heat||0)+0.25*7*(1+.25*s('heat'))*dt;
+      if(rnd()<dt*25)fx.push({k:'spark',x:wr(tgt.x+(rnd()-.5)*tgt.r*2),y:wr(tgt.y+(rnd()-.5)*tgt.r*2),life:.3,t:0,col:'#ff8a3d'});}break;
+    // a clone bay keeps one quarter-strength clone of you out while the drones are fighting, re-summoning it when it fades
+    case 'clone':{if(dd<500&&!o.isClone&&!ents.some(e=>e.isClone&&!e.dead&&e.srcAug===bay)){const c=mkClone(o,bay,0);c.dmgMul*=0.25;c.maxHp*=0.25;c.hp=c.maxHp;c.life=8;ents.push(c);
+      fx.push({k:'boom',x:c.x,y:c.y,r:c.r,col:'#8b8fa3',life:.5,t:0});}break;}}}
 function updParticles(t,dt){
   const pr=augsOf(t,'particle')[0];if(!pr){t.parts.length=0;return;}
   const count=24+4*S(pr,'count'),dps=4.5*(1+.25*S(pr,'heat')),hr=7*(1+.25*S(pr,'heat')),ispd=950*(1+.15*S(pr,'speed'));
@@ -867,7 +957,7 @@ function updTri(e,dt){
     [tgt,best]=nearestPlayer(e,420);
     for(const o of act){if(o.dead||o.down||o.isPlayer)continue;
       const ok=(o.team==='p'&&(PLAYER_STUFF.includes(o.kind)||o.isClone))||(o.team==='e'&&(o.kind==='tank'||o.kind==='drone'));
-      if(!ok||(o.kind!=='base'&&inSafe(o)))continue;if(o.kind==='tank'&&o.alpha<0.5&&dist(e,o)>120)continue;
+      if(!ok||(o.kind!=='base'&&inSafe(o)))continue;if(o.alpha<0.5&&dist(e,o)-(o.r||0)>(o.stealthR||120))continue;
       const d=dist(e,o);if(d<420&&d<best){best=d;tgt=o;}}
     if(!tgt&&e.siegeT&&!e.siegeT.dead&&e.siegeT.team==='p')tgt=e.siegeT;
   } else {const o=e.owner;if(!o||o.dead){e.dead=true;boom(e);return;}
@@ -885,12 +975,12 @@ function updMini(t,dt){
   const inp=t.input;let [tgt,best]=nearestPlayer(t,520);
   for(const o of act){if(o.dead||o.down||o.isPlayer)continue;
     const ok=(o.team==='p'&&(PLAYER_STUFF.includes(o.kind)||o.isClone))||(o.team==='w'&&o.kind==='tri');
-    if(!ok||(o.kind!=='base'&&inSafe(o)))continue;const d=dist(t,o);if(d<400&&d<best-60){best=d;tgt=o;}}
+    if(!ok||(o.kind!=='base'&&inSafe(o)))continue;const d=dist(t,o);if(o.alpha<0.5&&d-(o.r||0)>(o.stealthR||120))continue;if(d<400&&d<best-60){best=d;tgt=o;}}
   // siege units march on their target when nothing else is in reach
   if(!tgt&&t.siegeT&&!t.siegeT.dead&&t.siegeT.team==='p'){tgt=t.siegeT;}
   if(tgt){const dx=wd(t.x,tgt.x),dy=wd(t.y,tgt.y),d=Math.hypot(dx,dy)||1;t.aim=Math.atan2(dy,dx);
     const want=t.rammer?0:tgt.kind==='tri'?140:220;const radial=d>want+30?1:d<want-30?-1:0;const tang=Math.sin(T*0.7+t.id)*(t.rammer?0.2:0.9);
-    inp.mx=dx/d*radial-dy/d*tang;inp.my=dy/d*radial+dx/d*tang;inp.fire=d<480;inp.btns=inp.fire?511:0;}
+    inp.mx=dx/d*radial-dy/d*tang;inp.my=dy/d*radial+dx/d*tang;inp.fire=d<480;inp.btns=inp.fire?511:0;inp.tdist=d;}
   else{if(t.escort&&!t.escort.dead){const a=t.id+T*0.3;t.wp={x:wr(t.escort.x+Math.cos(a)*140),y:wr(t.escort.y+Math.sin(a)*140)};}
     else if(!t.wp||dist(t,t.wp)<40)t.wp={x:wr(t.spawn.x+(rnd()-.5)*1100),y:wr(t.spawn.y+(rnd()-.5)*1100)};
     const dx=wd(t.x,t.wp.x),dy=wd(t.y,t.wp.y),d=Math.hypot(dx,dy)||1;inp.mx=dx/d*.45;inp.my=dy/d*.45;inp.fire=false;inp.btns=0;
@@ -900,7 +990,7 @@ function updMini(t,dt){
 function updBase(b,dt){let tgt=null,bd=430;
   for(const e of act){if(e.dead||e.down)continue;
     if(e.team!=='e'&&e.team!=='w'&&!(e.team==='p'&&hostile(b,e)))continue;const d=dist(b,e);if(d<bd){bd=d;tgt=e;}}
-  b.input.mx=0;b.input.my=0;b.input.fire=!!tgt;b.input.btns=tgt?511:0;if(tgt)b.aim=angTo(b,tgt);
+  b.input.mx=0;b.input.my=0;b.input.fire=!!tgt;b.input.btns=tgt?511:0;b.input.tdist=tgt?bd:0;if(tgt)b.aim=angTo(b,tgt);
   b.hp=Math.min(b.maxHp,b.hp+5*dt);}
 // shadow clones fight near their owner and fade out when their time is up
 function updClone(c,dt){const o=c.owner,inp=c.input;c.life-=dt;
@@ -908,7 +998,7 @@ function updClone(c,dt){const o=c.owner,inp=c.input;c.life-=dt;
   let tgt=null,bd=560;for(const e of act){if(e.team==='n'||e.kind==='bus'||!hostile(c,e))continue;const d=dist(o,e);if(d<bd){bd=d;tgt=e;}}
   if(tgt){const dx=wd(c.x,tgt.x),dy=wd(c.y,tgt.y),d=Math.hypot(dx,dy)||1;c.aim=Math.atan2(dy,dx);const want=c.rammer?0:200;
     const radial=d>want+30?1:d<want-30?-1:0,tang=Math.sin(T*0.9+c.id)*0.8;inp.mx=dx/d*radial-dy/d*tang;inp.my=dy/d*radial+dx/d*tang;
-    inp.fire=d<500;inp.btns=inp.fire?(511&~BTN.shift):0;}
+    inp.fire=d<500;inp.btns=inp.fire?(511&~BTN.shift):0;inp.tdist=d;}
   else{const a=T*0.8+c.id,tx=wr(o.x+Math.cos(a)*90),ty=wr(o.y+Math.sin(a)*90),dx=wd(c.x,tx),dy=wd(c.y,ty),d=Math.hypot(dx,dy)||1;
     const f=d>40?1:0.2;inp.mx=dx/d*f;inp.my=dy/d*f;inp.fire=false;inp.btns=0;c.aim=o.aim;}
   c.alpha=0.55+0.1*Math.sin(T*6+c.id);}
@@ -917,11 +1007,63 @@ function updBoss(b,dt,active){
   b.th+=0.08*dt;const p=bossPoint(b,b.th);
   const dx=wd(b.x,p.x),dy=wd(b.y,p.y);b.vx+=(dx*1.4-b.vx)*Math.min(1,dt*2);b.vy+=(dy*1.4-b.vy)*Math.min(1,dt*2);
   b.x=wr(b.x+b.vx*dt);b.y=wr(b.y+b.vy*dt);b.rot+=dt*.35;
+  b.beams=null;
   if(!active)return;
-  b.ringT-=dt;if(b.ringT<=0){b.ringT=2.6;for(let i=0;i<18;i++)fireBullet(b,i/18*TAU+b.rot,8,300,0,6,2);}
-  const [tp]=nearestPlayer(b,650);
-  b.shotT-=dt;if(b.shotT<=0&&tp){b.shotT=1.3;const a=angTo(b,tp);for(let k=-1;k<=1;k++)fireBullet(b,a+k*.12,12,420,0,6.5,1.8);}
+  const [tp]=nearestPlayer(b,720);if(!tp&&b.bt!=='prism'){b.t1=Math.max(b.t1,0.5);return;}
+  b.t1-=dt;b.t2-=dt;b.t3-=dt;bossAttack(b,tp,dt);
 }
+// ring of bullets from a boss, optionally carrying a zone infusion
+function bossRing(b,n,dmg,spd,r,mod,off){for(let i=0;i<n;i++)fireBullet(b,i/n*TAU+(off||0),dmg,spd,0,r,2.2).mod=mod;}
+function bossFan(b,ang,n,spread,dmg,spd,r,mod,life){for(let k=0;k<n;k++)fireBullet(b,ang+(n>1?(k/(n-1)-.5)*spread:0),dmg,spd,0,r,life||2).mod=mod;}
+// Each zone boss has its own attack pattern. Damage numbers are base values; the boss's dmgMul scales them by zone.
+function bossAttack(b,tp,dt){const a=tp?angTo(b,tp):0;
+  switch(b.bt){
+    case 'oak': // Meadow: slow thorn rings and aimed thorns
+      if(b.t1<=0){b.t1=3;bossRing(b,10,7,260,6,null,b.rot);}
+      if(b.t2<=0&&tp){b.t2=1.8;bossFan(b,a,1,0,9,380,6);}break;
+    case 'worm':{ // Dunes: dives underground, resurfaces next to you in a burst of scorching sand
+      if(b.dive>0){b.dive-=dt;b.alpha=0.15;if(b.dive<=0){b.solid=true;b.alpha=1;
+          if(tp){const an=rnd()*TAU;b.x=wr(tp.x+Math.cos(an)*180);b.y=wr(tp.y+Math.sin(an)*180);b.vx=b.vy=0;}
+          bossRing(b,16,11,320,7,'scorch');fx.push({k:'boom',x:b.x,y:b.y,r:b.r,col:'#e8c37a',life:.7,t:0,big:true});}break;}
+      if(b.t3<=0){b.t3=8;b.dive=1.5;b.solid=false;fx.push({k:'boom',x:b.x,y:b.y,r:b.r,col:'#e8c37a',life:.6,t:0,big:true});break;}
+      if(b.t1<=0&&tp){b.t1=1.5;bossFan(b,a,3,0.3,10,420,6.5,'scorch');}break;}
+    case 'leviathan': // Ocean: arcing tidal waves and a shove that pushes everything away
+      if(b.t1<=0&&tp){b.t1=2.6;bossFan(b,a,9,1.2,10,300,7,'tidal');}
+      if(b.t2<=0){b.t2=5;for(const q of pls){const t=q.tank;if(q.offline||t.dead||dist(t,b)>460)continue;const an=angTo(b,t);t.vx+=Math.cos(an)*650;t.vy+=Math.sin(an)*650;}
+        fx.push({k:'boom',x:b.x,y:b.y,r:b.r+60,col:'#5cc8ff',life:.7,t:0,big:true});}break;
+    case 'colossus': // Tundra: a freezing aura plus frost shards
+      for(const q of pls){const t=q.tank;if(!q.offline&&!t.dead&&dist(t,b)<430)t.cold=Math.min(100,(t.cold||0)+45*dt);}
+      if(b.t1<=0&&tp){b.t1=1.6;bossFan(b,a,3,0.25,13,440,8,'frost');}
+      if(b.t2<=0){b.t2=4;bossRing(b,12,9,280,7,'frost',b.rot);}break;
+    case 'bog': // Marsh: slow poison globs and a brood of wild shapes
+      if(b.t1<=0&&tp){b.t1=2;bossFan(b,a,3,0.5,12,230,10,'venom',3);}
+      if(b.t2<=0){b.t2=8;const kids=ents.filter(e=>e.bossKid===b&&!e.dead).length;
+        for(let i=kids;i<Math.min(kids+3,8);i++){const an=rnd()*TAU;const k=mkTri(wr(b.x+Math.cos(an)*(b.r+20)),wr(b.y+Math.sin(an)*(b.r+20)),'w',{home:{x:b.x,y:b.y}});k.bossKid=b;ents.push(k);}}break;
+    case 'prism':{ // Caverns: three sweeping light beams; half of all bullets glance off its crystal hide
+      if(!tp&&!pls.some(q=>!q.offline&&!q.tank.dead&&dist(q.tank,b)<900))break;
+      const len=540,base=T*0.45;b.beams=[];for(let i=0;i<3;i++){const an=base+i*TAU/3;b.beams.push(an);bossBeam(b,an,len,26,dt);}
+      if(b.t1<=0){b.t1=3;bossRing(b,8,10,320,6,'prism',base);}break;}
+    case 'titan': // Volcano: magma bombs rain on you, and rings of fire
+      if(b.t1<=0&&tp){b.t1=2.2;for(let k=0;k<2;k++){const an=rnd()*TAU,dd=k?rnd()*160:0;strikes.push({x:wr(tp.x+Math.cos(an)*dd),y:wr(tp.y+Math.sin(an)*dd),t:1.1,r:90,dmg:55,owner:b,team:'e',pl:null,magma:1});}}
+      if(b.t2<=0){b.t2=3;bossRing(b,16,10,300,7,'scorch',b.rot);}break;
+    case 'tempest': // Storm: lightning strikes around you and chain lightning
+      if(b.t1<=0&&tp){b.t1=1.4;const an=rnd()*TAU,dd=rnd()*150;strikes.push({x:wr(tp.x+Math.cos(an)*dd),y:wr(tp.y+Math.sin(an)*dd),t:1,r:75,dmg:45,owner:b,team:'e',pl:null,storm:true});}
+      if(b.t2<=0&&tp){b.t2=3;let prev=b,cur=tp;const hit=new Set();for(let k=0;k<3&&cur;k++){hit.add(cur);hurt(cur,22,b,angTo(cur,prev),'storm');
+          fx.push({k:'bolt',a:{x:prev.x,y:prev.y},b:{x:cur.x,y:cur.y},life:.2,t:0,col:'#fff07a'});prev=cur;cur=nearestHostile(b,cur,260,hit,true);}}break;
+    case 'hollow': // Void: gravity wells under you, spiraling bullets, and wraiths from the dark
+      if(b.t1<=0&&tp){b.t1=7;wells.push({x:tp.x,y:tp.y,vx:0,vy:0,fly:0,life:3,pull:1.6,dps:32,owner:b,team:'e',pl:null,t:0,rw:260});}
+      if(b.t2<=0){b.t2=0.35;b.spin=(b.spin||0)+0.5;bossFan(b,b.spin,1,0,9,320,6,'void');bossFan(b,b.spin+Math.PI,1,0,9,320,6,'void');}
+      if(b.t3<=0){b.t3=14;const kids=ents.filter(e=>e.bossKid===b&&!e.dead).length;
+        for(let i=kids;i<Math.min(kids+2,4);i++){const an=rnd()*TAU,m=mkMini(wr(b.x+Math.cos(an)*(b.r+60)),wr(b.y+Math.sin(an)*(b.r+60)),3);m.bossKid=b;m.siege=true;m.name='Void Wraith';ents.push(m);}}break;}}
+// a boss beam burns every enemy of the boss that touches it
+function bossBeam(b,ang,len,dps,dt){const c=Math.cos(ang),s=Math.sin(ang);
+  for(const e of act){if(e===b||e.team==='n'||!hostileTeam(b.team,e))continue;const dx=wd(b.x,e.x),dy=wd(b.y,e.y),along=dx*c+dy*s;
+    if(along<0||along>len+e.r||Math.abs(-dx*s+dy*c)>e.r+6)continue;hurt(e,dps*dt,b,angTo(e,b),'prism');}}
+// boss loot: resources, lots of zone essence, a strong augment, and the Singularity from the harder zones
+function bossLoot(e){const Z=ZONES[e.z],d=Z.d,tier=Math.min(3,Math.floor((d-1)/2.5));
+  dropRes(e,tier,6+d,3+Math.ceil(d/2));if(tier<3)dropRes(e,tier+1,3+Math.floor(d/2),2+Math.ceil(d/3));dropEss(e,e.z,8+d);
+  dropAug(e,newAug(POOL[Math.floor(rnd()*POOL.length)],Math.min(20,4+2*d)));
+  if(d>=7||(d>=4&&rnd()<.35))dropAug(e,newAug('singularity'));}
 function updBus(b,dt){
   b.dx=0;b.dy=0;b.drot=0;
   const n=b.stops.length;
@@ -1026,7 +1168,7 @@ function ownedRegions(q){return beacons.filter(b=>b.pl&&sameSide(b.pl,q)).length
 // ================= abilities in the world =================
 function updWells(dt){for(const w of wells){w.t+=dt;
     if(w.fly>0){w.fly-=dt;w.x=wr(w.x+w.vx*dt);w.y=wr(w.y+w.vy*dt);continue;}
-    w.life-=dt;const RW=270;
+    w.life-=dt;const RW=w.rw||270;
     for(const e of act){if(e.static||e.kin||e.dead||e.down||e.kind==='bus'||!foe(w.team,w.pl,e))continue;
       const dx=wd(e.x,w.x),dy=wd(e.y,w.y),d=Math.hypot(dx,dy)||1;if(d>RW)continue;
       const f=w.pull*1700*(1-0.5*d/RW)/Math.sqrt(e.mass);e.vx+=dx/d*f*dt;e.vy+=dy/d*f*dt;if(d<75)hurt(e,w.dps*dt,w.owner);}
@@ -1097,7 +1239,7 @@ const CONTRACTS=[
   {k:'nests',n:'Destroy {n} swarm nest{s}',need:[1,2,3],test:(ev,e)=>ev==='kill'&&e.kind==='node'&&e.ntype==='swarm'},
   {k:'region',n:'Capture a region',need:[1,1,1],test:ev=>ev==='capture'},
   {k:'event',n:'Win a world event',need:[1,1,1],test:ev=>ev==='event'},
-  {k:'warden',n:'Take down a Warden',need:[1,1,1],test:(ev,e)=>ev==='kill'&&e.kind==='boss'}];
+  {k:'warden',n:'Defeat a zone boss',need:[1,1,1],test:(ev,e)=>ev==='kill'&&e.kind==='boss'}];
 const REWARDS=[[60,15,0,0],[40,40,12,0],[0,50,30,8]];
 function newContract(q){const lvl=Math.min(2,Math.floor(q.done/3));const pool=CONTRACTS.filter(c=>!q.contracts.some(x=>x.k===c.k));
   const c=pool[Math.floor(rnd()*pool.length)];const need=c.need[lvl];return {k:c.k,n:c.n.replace('{n}',need).replace('{s}',need>1?'s':''),need,have:0,lvl,reward:REWARDS[lvl]};}
@@ -1224,11 +1366,12 @@ function updBullets(dt){
       if(b.hits&&b.hits.has(e.id))continue;const rr=e.r+b.r;const dx=wd(b.x,e.x);if(dx>rr||dx<-rr)continue;const dy=wd(b.y,e.y);if(dy>rr||dy<-rr)continue;
       if(dx*dx+dy*dy>rr*rr)continue;
       // prism crystals ricochet bullets off their surface
-      if(e.reflect){const d=Math.hypot(dx,dy)||1,nx=dx/d,ny=dy/d,vn=b.vx*nx+b.vy*ny;if(vn>0){b.vx-=2*vn*nx;b.vy-=2*vn*ny;}
+      if(e.reflect&&(e.kind!=='boss'||rnd()<0.5)){const d=Math.hypot(dx,dy)||1,nx=dx/d,ny=dy/d,vn=b.vx*nx+b.vy*ny;if(vn>0){b.vx-=2*vn*nx;b.vy-=2*vn*ny;}
         b.x=wr(e.x-nx*(rr+1));b.y=wr(e.y-ny*(rr+1));fx.push({k:'spark',x:b.x,y:b.y,life:.2,t:0,col:'#e9d5ff'});break;}
       // reflector: a chance to send the shot straight back as your own
-      const rf=e.augs&&augsOf(e,'reflector')[0];
-      if(rf&&rnd()<Math.min(0.7,0.2+0.06*S(rf,'chance'))){b.vx=-b.vx;b.vy=-b.vy;b.team=e.team;b.pl=e.pl||null;b.owner=e;b.col=e.pl?e.pl.color:'#ff7b80';b.tg=null;
+      // a drone with a reflector in its bay has a quarter of the chance
+      const rf=e.augs?augsOf(e,'reflector')[0]:e.kind==='drone'&&e.src&&e.src.bay&&e.src.bay.type==='reflector'?e.src.bay:null;
+      if(rf&&rnd()<Math.min(0.7,0.2+0.06*S(rf,'chance'))*(e.kind==='drone'?0.25:1)){b.vx=-b.vx;b.vy=-b.vy;b.team=e.team;b.pl=e.pl||null;b.owner=e;b.col=e.pl?e.pl.color:'#ff7b80';b.tg=null;
         b.dmg*=0.8+0.1*S(rf,'power');b.hp=b.dmg;b.hp0=Math.max(b.hp0||0,b.dmg);b.life=Math.max(b.life,0.8);b.hits=null;fx.push({k:'arc',e,ang:Math.atan2(-dy,-dx),life:.3,t:0});break;}
       hurt(e,b.dmg,b.owner,Math.atan2(-dy,-dx),b.mod);
       if(!e.static&&!e.kin){const sp=Math.hypot(b.vx,b.vy)||1;e.vx+=b.vx/sp*b.dmg*9/e.mass;e.vy+=b.vy/sp*b.dmg*9/e.mass;}
@@ -1263,8 +1406,8 @@ function updPickups(dt){
     for(const q of pls){const t=q.tank;if(t.dead||t.aboard||q.offline||(p.igT>0&&p.ig===t))continue;const d=dist(p,t);if(d<(p.k==='aug'?70:110)+(t.magR||0)&&d<td){td=d;tk=t;}}
     if(tk){sp*=tk.magS||1;const a=angTo(p,tk);p.x=wr(p.x+Math.cos(a)*Math.min(td,sp*dt));p.y=wr(p.y+Math.sin(a)*Math.min(td,sp*dt));
       if(td<tk.r+8){collect(tk,p);}continue;}
-    let bb=null,bd=1e9;for(const q of pls){const b=q.base;if(!b)continue;const d=dist(p,b);if(d<b.pickR&&d<bd){bd=d;bb=b;}}
-    if(bb){const a=angTo(p,bb);const s=Math.min(bd,240*dt);p.x=wr(p.x+Math.cos(a)*s);p.y=wr(p.y+Math.sin(a)*s);
+    let bb=null,bd=1e9;for(const q of pls){const b=q.base;if(!b)continue;const d=dist(p,b);if(d<basePickR(b)&&d<bd){bd=d;bb=b;}}
+    if(bb){const a=angTo(p,bb);const s=Math.min(bd,240*(bb.engMul||1)*(bb.magS||1)*dt);p.x=wr(p.x+Math.cos(a)*s);p.y=wr(p.y+Math.sin(a)*s);
       if(bd<bb.r+8){const st=bb.pl.store;p.gone=true;if(p.k==='res'){st.res[p.tier]+=p.amt;progress(bb.pl,'mine',p);}else if(p.k==='ess')st.ess[p.z]+=p.amt;else{st.augs.push(cleanDrop(p.a));toastTo(bb.pl,`Base collected ${AUG[p.a.type].n}`);}}}}
   pickups=pickups.filter(p=>!p.gone);}
 function collect(t,p){p.gone=true;
@@ -1362,7 +1505,7 @@ function hpBar(x,y,w,e){if(e.hp>=e.maxHp)return;ctx.fillStyle='#0006';ctx.fillRe
 // Every augment has its own mount and shape. Weapons point along the aim, engines and drone bays sit at the back,
 // shields and shredders on the rim, and the rest are marked on the body. Higher level tiers draw thicker, larger parts.
 function drawTank(t,x,y){
-  ctx.globalAlpha=t===player||(t.isPlayer&&friendly(t))?Math.max(0.35,t.alpha):Math.max(0.08,t.alpha);
+  ctx.globalAlpha=t===player||((t.isPlayer||t.isBase)&&friendly(t))?Math.max(0.35,t.alpha):Math.max(0.08,t.alpha);
   const r=t.r,dark=strokeFor(t.fill,0);
   const shr=augsOf(t,'shredder');
   if(shr.length){const tr=augTier(shr[0]),reach=t.shredReach||0;const n=10+2*tr+2*(shr.length-1);
@@ -1424,6 +1567,33 @@ function drawTank(t,x,y){
   if(tag&&(t===player||t.alpha>0.5)){ctx.font='500 12px Rubik,system-ui';ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle=PAL.bg;
     const lbl=t.isPlayer&&t!==player&&friendly(t)?'◆ '+tag:tag;ctx.strokeText(lbl,x,y-r-(t.isBase?10:16));ctx.fillStyle=friendly(t)?PAL.ink:'#ff7a7f';ctx.fillText(lbl,x,y-r-(t.isBase?10:16));}
 }
+// every zone boss has its own silhouette
+function drawBoss(e,x,y){const r=e.r,dark=strokeFor(e.fill,0),rot=e.rot||0;ctx.globalAlpha=e.alpha??1;
+  if(e.beams)for(const an of e.beams){const x2=x+Math.cos(an)*540,y2=y+Math.sin(an)*540;ctx.strokeStyle='#e9d5ff';ctx.globalAlpha=.4;ctx.lineWidth=10;
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x2,y2);ctx.stroke();ctx.globalAlpha=1;ctx.lineWidth=3;ctx.strokeStyle='#ffffff';ctx.stroke();}
+  ctx.globalAlpha=e.alpha??1;
+  switch(e.bt){
+    case 'oak':ctx.beginPath();for(let i=0;i<24;i++){const a=rot+i*TAU/24,rr=i%2?r:r*1.18;ctx.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr);}ctx.closePath();paint(e);
+      ctx.strokeStyle=dark;ctx.lineWidth=3;pathCircle(x,y,r*.45);ctx.stroke();break;
+    case 'worm':for(let i=3;i>=1;i--){pathCircle(x-Math.cos(rot)*i*r*.55,y-Math.sin(rot)*i*r*.55,r*(1-i*.18));paint(e);}pathCircle(x,y,r);paint(e);
+      ctx.fillStyle=dark;for(let i=0;i<6;i++){const a=rot+i*TAU/6;pathPoly(x+Math.cos(a)*r*.6,y+Math.sin(a)*r*.6,5,3,a);ctx.fill();}break;
+    case 'leviathan':pathCircle(x,y,r);paint(e);ctx.strokeStyle=dark;ctx.lineWidth=4;
+      for(let i=0;i<6;i++){const a=rot+i*TAU/6;ctx.beginPath();ctx.moveTo(x+Math.cos(a)*r,y+Math.sin(a)*r);ctx.quadraticCurveTo(x+Math.cos(a+.4)*r*1.5,y+Math.sin(a+.4)*r*1.5,x+Math.cos(a+.2)*r*1.8+Math.sin(T*2+i)*8,y+Math.sin(a+.2)*r*1.8);ctx.stroke();}break;
+    case 'colossus':ctx.beginPath();for(let i=0;i<12;i++){const a=rot+i*TAU/12,rr=i%2?r*.7:r*1.1;ctx.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr);}ctx.closePath();paint(e);
+      ctx.globalAlpha=.2;ctx.strokeStyle='#bfe6ff';ctx.lineWidth=2;pathCircle(x,y,430);ctx.stroke();ctx.globalAlpha=e.alpha??1;break;
+    case 'bog':ctx.beginPath();for(let i=0;i<28;i++){const a=i*TAU/28,rr=r*(1+0.08*Math.sin(T*3+i*1.7));ctx.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr);}ctx.closePath();paint(e);
+      ctx.fillStyle='#9fe870';for(let i=0;i<5;i++){const a=T+i*1.3;pathCircle(x+Math.cos(a)*r*.5,y+Math.sin(a)*r*.5,4+2*Math.sin(T*4+i));ctx.fill();}break;
+    case 'prism':pathPoly(x,y,r*1.15,4,rot);paint(e);ctx.strokeStyle='#ffffff';ctx.lineWidth=2;pathPoly(x,y,r*.6,4,-rot*2);ctx.stroke();break;
+    case 'titan':pathPoly(x,y,r,5,rot);paint(e);ctx.fillStyle='#ffb347';ctx.globalAlpha*=.6+.3*Math.sin(T*4);pathCircle(x,y,r*.4);ctx.fill();ctx.globalAlpha=e.alpha??1;break;
+    case 'tempest':pathCircle(x,y,r);paint(e);ctx.strokeStyle='#fff07a';ctx.lineWidth=3;ctx.beginPath();
+      for(let i=0;i<=16;i++){const a=rot*2+i*TAU/16,rr=r*(i%2?1.15:1.35);i?ctx.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr):ctx.moveTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr);}ctx.stroke();
+      ctx.fillStyle='#1b2130';pathCircle(x,y,r*.35);ctx.fill();break;
+    case 'hollow':ctx.fillStyle='#0d0718';pathCircle(x,y,r);ctx.fill();ctx.lineWidth=4;ctx.strokeStyle=T-e.hitT<0.06?'#ffffff':e.fill;ctx.stroke();
+      ctx.strokeStyle='#8b5cf6';ctx.lineWidth=2;for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(x,y,r*(1.15+0.2*i),rot*(i+1),rot*(i+1)+4);ctx.stroke();}break;
+    default:pathPoly(x,y,r,8,rot);paint(e);}
+  ctx.globalAlpha=1;
+  ctx.font='700 13px Rubik,system-ui';ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle=PAL.bg;ctx.strokeText(e.name||'',x,y-r-18);ctx.fillStyle='#ffb3a8';ctx.fillText(e.name||'',x,y-r-18);
+  if(e.hp<e.maxHp){const w=Math.max(140,r*2.4);ctx.fillStyle='#0008';ctx.fillRect(x-w/2,y+r+14,w,7);ctx.fillStyle='#ff7a7f';ctx.fillRect(x-w/2,y+r+14,w*e.hp/e.maxHp,7);}}
 function drawBeacon(b,x,y){const own=b.team==='p';
   ctx.setLineDash([10,10]);ctx.lineDashOffset=-T*20;ctx.lineWidth=2;ctx.globalAlpha=own?.6:.4;ctx.strokeStyle=own?b.fill:PAL.ink;pathCircle(x,y,260);ctx.stroke();
   ctx.setLineDash([]);ctx.lineDashOffset=0;ctx.globalAlpha=1;
@@ -1488,8 +1658,8 @@ function render(){
   ctx.setLineDash([14,12]);ctx.lineWidth=2;
   for(const z of SZ){const [x,y]=sxy(z);if(!vis(x,y,z.r+20))continue;ctx.globalAlpha=.08;ctx.fillStyle=PAL.ink;pathCircle(x,y,z.r);ctx.fill();
     ctx.globalAlpha=.6;ctx.strokeStyle=PAL.ink;ctx.stroke();ctx.globalAlpha=.7;ctx.fillStyle=PAL.ink;ctx.font='500 13px Rubik,system-ui';ctx.textAlign='center';ctx.fillText(z.n,x,y-z.r+22);ctx.globalAlpha=1;}
-  if(base){const [x,y]=sxy(base);if(vis(x,y,base.pickR+20)){ctx.strokeStyle=player.fill;ctx.globalAlpha=.5;pathCircle(x,y,170);ctx.stroke();
-    ctx.globalAlpha=.2;pathCircle(x,y,base.pickR);ctx.stroke();ctx.globalAlpha=1;}}
+  if(base){const [x,y]=sxy(base),pr=basePickR(base);if(vis(x,y,pr+20)){ctx.strokeStyle=player.fill;ctx.globalAlpha=.5;pathCircle(x,y,170);ctx.stroke();
+    ctx.globalAlpha=.2;pathCircle(x,y,pr);ctx.stroke();ctx.globalAlpha=1;}}
   for(const n of nodes){const [x,y]=sxy(n);if(!vis(x,y,220))continue;
     if(n.down){if(n.ntype==='anomaly')continue;ctx.globalAlpha=.35;ctx.strokeStyle=n.fill;pathPoly(x,y,n.r,6,0);ctx.stroke();ctx.globalAlpha=1;continue;}
     if(n.ntype==='heal'||n.ntype==='electric'){ctx.lineDashOffset=n.ntype==='electric'?-T*30:0;ctx.globalAlpha=.5;ctx.strokeStyle=n.fill;pathCircle(x,y,190);ctx.stroke();ctx.globalAlpha=1;}}
@@ -1519,13 +1689,13 @@ function render(){
   for(const [e,x,y] of layers[2]){
     if(e.kind==='tri'){if(e.big){pathPoly(x,y,e.r,6,e.rot);paint(e);ctx.lineWidth=2;ctx.strokeStyle=strokeFor(e.fill,0);pathPoly(x,y,e.r*.5,3,-e.rot);ctx.stroke();}
       else{const sd=e.sides??3;if(sd===0)pathCircle(x,y,e.r*1.05);else pathPoly(x,y,e.r*(sd===3?1.25:1.1),sd,e.rot);paint(e);}}
-    else if(e.kind==='drone'){pathPoly(x,y,e.r*1.2,3,e.rot);paint(e);}
+    else if(e.kind==='drone'){if(e.alpha<1)ctx.globalAlpha=friendly(e)?0.4:0.12;pathPoly(x,y,e.r*1.2,3,e.rot);paint(e);ctx.globalAlpha=1;}
     else if(e.kind==='beacon')drawBeacon(e,x,y);
     else if(e.kind==='struct')drawStruct(e,x,y);
     else if(e.kind==='convoy'){ctx.save();ctx.translate(x,y);ctx.rotate(e.rot);ctx.beginPath();if(ctx.roundRect)ctx.roundRect(-60,-30,120,60,12);else ctx.rect(-60,-30,120,60);ctx.restore();paint(e);
       ctx.save();ctx.translate(x,y);ctx.rotate(e.rot);ctx.strokeStyle=strokeFor(e.fill,0);ctx.lineWidth=3;ctx.strokeRect(-40,-18,50,36);ctx.restore();
       hpBar(x,y+46,120,e);ctx.font='500 12px Rubik,system-ui';ctx.textAlign='center';ctx.fillStyle='#ffb38a';ctx.fillText('Supply Convoy',x,y-44);}
-    else if(e.kind==='boss'){pathPoly(x,y,e.r,8,e.rot);paint(e);ctx.lineWidth=3;ctx.strokeStyle=strokeFor(e.fill,0);pathPoly(x,y,e.r*.55,8,-e.rot*1.5);ctx.stroke();hpBar(x,y+e.r+12,120,e);}
+    else if(e.kind==='boss')drawBoss(e,x,y);
     else drawTank(e,x,y);}
   for(const [e,x,y] of layers[3])drawTank(e,x,y);
   for(const b of bullets){const [x,y]=sxy(b);if(!vis(x,y,10))continue;pathCircle(x,y,bulletR(b));const bc=b.col||'#ff7b80';ctx.fillStyle=bc;ctx.fill();
@@ -1533,8 +1703,9 @@ function render(){
   for(const e of act){if(!e.augs||e.dead)continue;const [x,y]=sxy(e);
     for(const a of e.augs){
       if(a.type==='laser'&&a._on&&a._beams){for(const bm of a._beams){const x2=x+Math.cos(bm.ang)*bm.len,y2=y+Math.sin(bm.ang)*bm.len;
-        ctx.strokeStyle=e.team==='p'?'#63f5ff':'#ff6b8b';ctx.globalAlpha=.45;ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x2,y2);ctx.stroke();
-        ctx.globalAlpha=1;ctx.lineWidth=2;ctx.strokeStyle='#ffffff';ctx.stroke();}}
+        // defense beams (bm.d) are thinner than the main beam
+        ctx.strokeStyle=e.team==='p'?'#63f5ff':'#ff6b8b';ctx.globalAlpha=bm.d?.35:.45;ctx.lineWidth=bm.d?3:7;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x2,y2);ctx.stroke();
+        ctx.globalAlpha=1;ctx.lineWidth=bm.d?1:2;ctx.strokeStyle='#ffffff';ctx.stroke();}}
       if(a.type==='grapple'&&a._h&&!a._h.dead){const [hx,hy]=sxy(a._h);ctx.strokeStyle='#c9ced4';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(hx,hy);ctx.stroke();
         pathCircle(hx,hy,4);ctx.fillStyle='#c9ced4';ctx.fill();}}
     if(e.parts&&e.parts.length){for(const p of e.parts){const [px,py]=sxy(p);pathCircle(px,py,p.st===2?3:2.4);ctx.fillStyle=p.st===2?'#ff8a3d':'#ffd9a0';ctx.fill();}}}
@@ -1556,8 +1727,8 @@ function render(){
       else if(f.k==='puff'){pathCircle(x,y,3.5*(1-k)+1);ctx.fillStyle=f.col;ctx.fill();}}
     ctx.globalAlpha=1;}
   // gravity wells and incoming orbital strikes
-  for(const w of wells){const [x,y]=sxy(w);if(!vis(x,y,300))continue;const R=w.fly>0?22:270;
-    ctx.globalAlpha=.25;ctx.fillStyle='#2a1850';pathCircle(x,y,w.fly>0?14:70);ctx.fill();ctx.globalAlpha=.6;ctx.strokeStyle='#b58cff';ctx.lineWidth=2;
+  for(const w of wells){const [x,y]=sxy(w);if(!vis(x,y,300))continue;const RW=w.rw||270,R=w.fly>0?22:RW;
+    ctx.globalAlpha=.25;ctx.fillStyle='#2a1850';pathCircle(x,y,w.fly>0?14:RW*0.26);ctx.fill();ctx.globalAlpha=.6;ctx.strokeStyle='#b58cff';ctx.lineWidth=2;
     for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(x,y,R*(0.35+0.3*i)*(1-((T*0.8+i/3)%1)*0.4),0,TAU);ctx.stroke();}ctx.globalAlpha=1;
     pathCircle(x,y,10);ctx.fillStyle='#0d0718';ctx.fill();}
   for(const s of strikes){const [x,y]=sxy(s);if(!vis(x,y,s.r+20))continue;ctx.strokeStyle='#ffe08a';ctx.lineWidth=2.5;ctx.globalAlpha=.8;ctx.setLineDash([8,6]);
@@ -1630,9 +1801,9 @@ function hud(){const v=view();if(!started||!v)return;const p=player,tk=v.tank;
   bHp.style.width=(100*p.hp/p.maxHp)+'%';bSh.style.width=p.shMax?(100*Math.min(1,p.sh/p.maxHp))+'%':'0%';
   bBat.style.width=(100*p.bat/p.batMax)+'%';bHeat.style.width=Math.min(100,p.heat)+'%';
   // slot chips: name, level, the button it's on, and a cooldown when recharging
-  const sig=tk.slots+'|'+tk.augs.map(a=>a.uid+':'+a.lvl+':'+bindOf(a)+':'+Math.ceil(cdOf(a))).join(',');
-  if(sig!==lastSlotSig){lastSlotSig=sig;let h='';for(const a of tk.augs){const d=AUG[a.type],cd=Math.ceil(cdOf(a)),key=BIND_SHORT[bindOf(a)]||'';
-      h+=`<b style="--cc:${CATCOL[d.unique?'unique':d.cat]};flex:${d.size}">${d.ab} ${a.lvl}${cd>0&&(d.unique||a.type==='dash'||a.type==='missiles')?` <span class="cd">${cd}s</span>`:key?`<small>${key}</small>`:''}</b>`;}
+  const sig=tk.slots+'|'+tk.augs.map(a=>a.uid+':'+a.lvl+':'+bindOf(a)+':'+Math.ceil(cdOf(a))+':'+actOf(a)).join(',');
+  if(sig!==lastSlotSig){lastSlotSig=sig;let h='';for(const a of tk.augs){const d=AUG[a.type],cd=Math.ceil(cdOf(a)),key=BIND_SHORT[bindOf(a)]||'',on=actOf(a);
+      h+=`<b style="--cc:${CATCOL[d.unique?'unique':d.cat]};flex:${d.size}">${d.ab} ${a.lvl}${on?` <span class="cd">${on===2?'LOW':'ON'}</span>`:cd>0&&(d.unique||a.type==='dash'||a.type==='missiles')?` <span class="cd">${cd}s</span>`:key?`<small>${key}</small>`:''}</b>`;}
     for(let i=0;i<freeSlots(tk);i++)h+='<b class="empty">empty</b>';slotsEl.innerHTML=h;}
   // open panels follow the live game: close the base menu if you leave, redraw when things change
   if(!menuEl.hidden){if(menuMode==='base'&&(!base||p.dead||dist(p,base)>230))closeMenu();else if(!drag&&mf%10===0&&invSig()!==menuSig)renderMenu();}
@@ -1648,6 +1819,8 @@ function hud(){const v=view();if(!started||!v)return;const p=player,tk=v.tank;
   if(bt+dis!==lastBtn){lastBtn=bt+dis;btnBase.textContent=bt;btnBase.disabled=dis;btnBase.classList.toggle('go',bt==='Open base');}}
 const BIND_SHORT={pri:'',lmb:'L',rmb:'R',mmb:'M',space:'Spc',shift:'Shft',q:'Q',e:'E',f:'F',r:'R',auto:'',always:''};
 function cdOf(a){if(isGuest())return (G.me&&G.me.cd&&G.me.cd[a.uid])||0;return a._cd||0;}
+// toggle state for the HUD: 1 = on, 2 = locked out until 20% battery, 0 = off
+function actOf(a){if(a.type!=='clone')return 0;if(isGuest()){const s=G.me&&G.me.tg&&G.me.tg[a.uid];return s|0;}return a._act?1:a._lock?2:0;}
 function regionLabel(p){const ri=regionAt(p),R0=REGIONS[ri];if(!R0.b)return `${R0.n} · zone 1 of 9 · starting zone`;
   const own=beaconOwner(ri);return `${R0.n} · zone ${R0.d} of 9${own?` · ${own}`:''}`;}
 // who owns a region, from the local player's point of view
@@ -1704,7 +1877,7 @@ function card(a,loc){const d=AUG[a.type];const cat=d.unique?'unique':d.cat;
 function section(title,arr,loc,emptyMsg,extra){return `<h3>${title}</h3>`+(arr.length?`<div class="cards" data-drop="${loc}">${arr.map(a=>card(a,loc)).join('')}</div>`:`<div class="empty-note" data-drop="${loc}">${emptyMsg}</div>`)+(extra||'');}
 function baySections(){let h='';const v=view();
   for(const d of droneAugs()){const where=v.tank.augs.includes(d)?'tank':'base';
-    h+=`<div class="bay" style="margin-top:8px">`+section(`Drone bay — Drones Lv ${d.lvl} (${where})`,d.bay?[d.bay]:[],'bay:'+d.uid,'Empty. Drop a gun, laser, lightning, missile pod, shredder, shield, healing, or engine here. Drones use it at 25% strength; without one they only collect.')+'</div>';}
+    h+=`<div class="bay" style="margin-top:8px">`+section(`Drone bay — Drones Lv ${d.lvl} (${where})`,d.bay?[d.bay]:[],'bay:'+d.uid,'Empty. Drop any augment except Drones here. Drones use it at 25% strength; without one they only collect.')+'</div>';}
   return h;}
 function essHtml(e){if(!e||!e.some(v=>v>0))return '';return `<div class="res" style="margin-top:4px;font-size:12px">${ZONES.map((z,i)=>e[i]?`<span style="--c:${z.ac}" title="${esc(z.n)} essence">${e[i]} ${esc(MODS[z.mod].n.toLowerCase())}</span>`:'').join('')}</div>`;}
 function resHtml(r){return `<div class="res">${r.map((v,i)=>`<span style="--c:${TIER[i].c}">${v} ${tn(i)}</span>`).join('')}</div>`;}
@@ -2033,10 +2206,12 @@ function serE(e){const o={i:e.id,k:e.kind,x:r0(e.x),y:r0(e.y),r:e.r,f:e.fill,h:r
   if(e.kind==='node'){o.nt=e.ntype;o.ti=e.tier;}
   else if(e.kind==='bus'){o.w=e.w;o.hh=e.h;}
   else if(e.kind==='tri'){if(e.big)o.bg=1;if(e.sides!==undefined)o.sd=e.sides;}
+  else if(e.kind==='drone'){if(e.alpha<1)o.al=r2(e.alpha);}
   else if(e.kind==='beacon'){o.ri=e.ri;o.cp=r2(e.cap);o.a=r2(e.aim);if(e.blk)o.bk=e.blk;}
+  else if(e.kind==='boss'){o.bt=e.bt;o.bz=e.z;if(e.alpha<1)o.al=r2(e.alpha);if(e.beams)o.bm=e.beams.map(r2);}
   else if(e.kind==='struct'){o.st=e.stype;o.a=r2(e.aim);}
   else if(e.kind==='tank'||e.kind==='base'){o.a=r2(e.aim);o.al=r2(e.alpha);o.sp=r2(e.spin);if(e.shredReach)o.sr=e.shredReach;
-    o.g=e.augs.map(a=>{const x=[a.type,a.lvl];if(a.type==='laser'&&a._on&&a._beams)x.push(a._beams.map(b=>[r2(b.ang),r0(b.len)]));
+    o.g=e.augs.map(a=>{const x=[a.type,a.lvl];if(a.type==='laser'&&a._on&&a._beams)x.push(a._beams.map(b=>b.d?[r2(b.ang),r0(b.len),1]:[r2(b.ang),r0(b.len)]));
       else if(a.type==='grapple'&&a._h&&!a._h.dead)x.push(a._h.id);
       else if(a.type==='sword'||a.type==='beamsword')x.push(a._sw?r2(a._ang):null,a.st.size||0);
       else if(a.type==='railgun')x.push(r2(a._ch||0));else if(a.type==='flamer')x.push(a._on?1:0,a.st.range||0);
@@ -2055,15 +2230,16 @@ function socialOf(q){return {roster:roster(),inv:q.invites.slice(),sent:pls.filt
 function meOf(q){const t=q.tank,b=q.base,cd={};for(const a of t.augs)if(a._cd>0.05)cd[a.uid]=r2(a._cd);
   const lk=q.lock?(q.lock.e?{i:q.lock.e.id}:{x:r0(q.lock.x),y:r0(q.lock.y)}):null;
   return {id:t.id,x:r0(t.x),y:r0(t.y),hp:r2(t.hp),mh:t.maxHp,sh:r2(t.sh),sm:t.shMax,bt:r2(t.bat),bm:t.batMax,ht:r2(t.heat),cd,lk,rc:q.recall,
+  tg:Object.fromEntries(t.augs.filter(a=>a.type==='clone'&&(a._act||a._lock)).map(a=>[a.uid,a._act?1:2])),
   jobs:q.contracts.map(c=>({n:c.n,need:c.need,have:c.have,lvl:c.lvl,reward:c.reward})),es:t.ess,fd:[...q.found],cold:r0(t.cold||0),psn:r0(t.poison||0),
-  c:t.carry,cg:t.cargo.length,ab:t.aboard?1:0,d:t.dead?1:0,rt:r2(t.respawnT),base:b?{x:r0(b.x),y:r0(b.y),pr:b.pickR}:null};}
+  c:t.carry,cg:t.cargo.length,ab:t.aboard?1:0,d:t.dead?1:0,rt:r2(t.respawnT),base:b?{x:r0(b.x),y:r0(b.y),pr:basePickR(b)}:null};}
 function snapFor(q){const c=q.tank,R=(q.view||900)+160;const near=e=>Math.abs(wd(c.x,e.x))<R&&Math.abs(wd(c.y,e.y))<R;
   const E=[];for(const e of ents){if(e.dead||!near(e))continue;E.push(serE(e));}
   const B=[];for(const b of bullets)if(near(b))B.push([r0(b.x),r0(b.y),r2(bulletR(b)),b.col,r0(b.vx),r0(b.vy)]);
   const P=[];for(const p of pickups)if(!p.gone&&near(p))P.push(p.k==='res'?[r0(p.x),r0(p.y),0,p.tier,p.amt]:p.k==='ess'?[r0(p.x),r0(p.y),2,p.z]:[r0(p.x),r0(p.y),1,p.a.type]);
   const MN=mines.filter(near).map(m=>[r0(m.x),r0(m.y),m.arm>0?0:1,m.col]);
   const F=[];let mx=q.lastFx||0;for(const f of fx){if(f.id<=(q.lastFx||0))continue;mx=Math.max(mx,f.id);const s=serFx(f);if(s&&near(s))F.push(s);}
-  const WL=wells.filter(near).map(w=>[r0(w.x),r0(w.y),w.fly>0?1:0]),SL=strikes.filter(near).map(s=>[r0(s.x),r0(s.y),s.r,r2(s.t)]);
+  const WL=wells.filter(near).map(w=>[r0(w.x),r0(w.y),w.fly>0?1:0,w.rw||270]),SL=strikes.filter(near).map(s=>[r0(s.x),r0(s.y),s.r,r2(s.t)]);
   q.lastFx=mx;return {e:E,b:B,p:P,f:F,w:WL,s:SL,mn:MN,me:meOf(q)};}
 function netHostTick(dt){const N=NET;if(N.role!=='host')return;N.snapT+=dt;N.miniT+=dt;if(N.snapT<0.05)return;N.snapT=0;
   const mini=N.miniT>1;if(mini)N.miniT=0;
@@ -2113,7 +2289,7 @@ function onSnap(m){G.lastSnap=performance.now();
     G.inv={tank:{slots:m.inv.tank.slots|0,stats:m.inv.tank.stats||{},augs:cl(m.inv.tank.augs)},cargo:cl(m.inv.cargo),sc:m.inv.sc&&typeof m.inv.sc==='object'?m.inv.sc:{},
       store:{res:(m.inv.store.res||[0,0,0,0]).map(v=>+v||0),ess:ZONES.map((z,i)=>+((m.inv.store.ess||[])[i])||0),augs:cl(m.inv.store.augs)},
       base:m.inv.base?{isBase:true,x:+m.inv.base.x,y:+m.inv.base.y,slots:m.inv.base.slots|0,stats:m.inv.base.stats||{},augs:cl(m.inv.base.augs)}:null};}
-  wells=(m.w||[]).map(w=>({x:w[0],y:w[1],fly:w[2]}));strikes=(m.s||[]).map(s=>({x:s[0],y:s[1],r:s[2],t:s[3]}));
+  wells=(m.w||[]).map(w=>({x:w[0],y:w[1],fly:w[2],rw:clampNum(w[3],50,400,270)}));strikes=(m.s||[]).map(s=>({x:s[0],y:s[1],r:s[2],t:s[3]}));
   if(m.mm)MM=m.mm;
   const d=m.me||{};const selfId=d.id;const seen=new Set(),list=[];
   for(const o of Array.isArray(m.e)?m.e:[]){let e=G.ents.get(o.i);
@@ -2121,11 +2297,12 @@ function onSnap(m){G.lastSnap=performance.now();
     else if(Math.abs(wd(e.x,o.x))>400||Math.abs(wd(e.y,o.y))>400){e.x=o.x;e.y=o.y;}
     e.tx=o.x;e.ty=o.y;e.r=o.r;e.fill=o.f;e.hp=o.h;e.maxHp=1;e.rot=o.ro;e.heat=o.ht||0;if(o.fl)e.hitT=T;e.down=o.dn?1:0;e.team=o.tm||'n';e.pid=o.pid;
     if(o.k==='node'){e.ntype=o.nt;e.tier=o.ti|0;}else if(o.k==='bus'){e.w=o.w;e.h=o.hh;}
-    else if(o.k==='tri'){e.big=!!o.bg;e.sides=o.sd===undefined?3:o.sd|0;}else if(o.k==='beacon'){e.ri=o.ri|0;e.cap=+o.cp||0;e.aim=o.a;e.blk=o.bk|0;}else if(o.k==='struct'){e.stype=own(STRUCT,o.st)?o.st:'turret';e.aim=o.a;}
+    else if(o.k==='tri'){e.big=!!o.bg;e.sides=o.sd===undefined?3:o.sd|0;}else if(o.k==='drone')e.alpha=o.al===undefined?1:+o.al;else if(o.k==='beacon'){e.ri=o.ri|0;e.cap=+o.cp||0;e.aim=o.a;e.blk=o.bk|0;}else if(o.k==='struct'){e.stype=own(STRUCT,o.st)?o.st:'turret';e.aim=o.a;}
+    else if(o.k==='boss'){const z=Math.max(0,Math.min(8,o.bz|0));e.bt=BOSSES[z].k;e.z=z;e.name=BOSSES[z].n;e.alpha=o.al===undefined?1:+o.al;e.beams=Array.isArray(o.bm)?o.bm.map(Number):null;}
     if(o.k==='tank'||o.k==='base'){if(o.i!==selfId)e.aim=o.a;e.alpha=o.al;e.shredReach=o.sr||0;e.isBase=o.k==='base';e.isPlayer=!!o.pn;
       e.name=o.pn?cleanText(o.pn,16):o.nm?cleanText(o.nm,20):'';e.rc=o.rc===undefined?-1:+o.rc;
       e.augs=(o.g||[]).filter(g=>isAug(g[0])).map(g=>{const a={type:g[0],lvl:g[1]|0,st:{}};
-        if(g[0]==='laser'&&Array.isArray(g[2])){a._on=true;a._beams=g[2].map(b=>({ang:b[0],len:b[1]}));}else if(g[0]==='grapple'&&g[2])a._hid=g[2];
+        if(g[0]==='laser'&&Array.isArray(g[2])){a._on=true;a._beams=g[2].map(b=>({ang:b[0],len:b[1],d:b[2]?1:0}));}else if(g[0]==='grapple'&&g[2])a._hid=g[2];
         else if(g[0]==='sword'||g[0]==='beamsword'){a._ang=g[2]==null?undefined:+g[2];a.st={size:g[3]|0};}else if(g[0]==='railgun')a._ch=+g[2]||0;else if(g[0]==='flamer'){a._on=!!g[2];a.st={range:g[3]|0};}return a;});
       e.isClone=!!o.cl;
       e.parts=(o.pt||[]).map(p=>({x:p[0],y:p[1],st:p[2]}));}
