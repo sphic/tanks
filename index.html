@@ -198,7 +198,7 @@ button{font:inherit;color:inherit}
 (()=>{
 'use strict';
 // ================= constants =================
-const TAU=Math.PI*2, W=36000, HALF=W/2;
+const TAU=Math.PI*2, W=18000, HALF=W/2; // 3x3 zones of 6000 each
 const CT=120, CK=0.2, ACTIVE_R=1500, CONE=1.05;
 const TIER=[{n:'Iron',c:'#8e98a6'},{n:'Silver',c:'#dde4ec'},{n:'Gold',c:'#f3c24f'},{n:'Platinum',c:'#72e0da'}];
 const PCOL='#3d9bff', ECOL='#ff5a5f', WCOL='#ffa94d', BUSCOL='#ffcf5a';
@@ -281,17 +281,18 @@ const MODS={
   void:{n:'Void',c:'#b18cff',d:'Hits ignore shields and armor.'}};
 const MOD_OF_ZONE=ZONES.map(z=>z.mod);
 // safe zones: the old hub and its four posts sit in the Meadow; every other zone has an outpost in its center
-const SZ=[{x:HALF,y:HALF,r:300,n:'Hub'},{x:HALF,y:HALF-3400,r:240,n:'North post'},{x:HALF+3300,y:HALF+900,r:240,n:'East post'},
-  {x:HALF-600,y:HALF+3600,r:240,n:'South post'},{x:HALF-3400,y:HALF+300,r:240,n:'West post'},
+const SZ=[{x:HALF,y:HALF,r:300,n:'Hub'},{x:HALF,y:HALF-1700,r:240,n:'North post'},{x:HALF+1650,y:HALF+450,r:240,n:'East post'},
+  {x:HALF-300,y:HALF+1800,r:240,n:'South post'},{x:HALF-1700,y:HALF+150,r:240,n:'West post'},
   ...ZONES.slice(1).map(z=>({x:z.cx,y:z.cy,r:260,n:z.n.split(' ').pop()+' Outpost',z:z.i}))];
 // One unique boss per zone, in zone order. Each patrols a loop in its zone and gets tougher with the zone's difficulty.
 const BOSSES=[
   {k:'oak',n:'The Elder Thornback'},{k:'worm',n:'Sandmaw Queen'},{k:'leviathan',n:'The Leviathan'},
   {k:'colossus',n:'Frost Colossus'},{k:'bog',n:'Bog Mother'},{k:'prism',n:'Prism Sentinel'},
   {k:'titan',n:'Magma Titan'},{k:'tempest',n:'Tempest Eye'},{k:'hollow',n:'The Hollow King'}];
-const BCS=ZONES.map(Z=>({x:Z.cx-3000,y:Z.cy+2800}));
+// each boss patrols the north-west part of its zone, away from the outpost (center) and the beacon (north-east)
+const BCS=ZONES.map(Z=>({x:Z.cx-1650,y:Z.cy-1550}));
 // one capturable beacon per zone outside the Meadow; d is the zone's difficulty (1-9)
-const REGIONS=[];for(let gi=0;gi<9;gi++){const z=ZONES[GRID2Z[gi]];REGIONS[gi]={n:z.n,d:z.d,z,b:z.i===0?null:{x:z.cx+2600,y:z.cy-2100}};}
+const REGIONS=[];for(let gi=0;gi<9;gi++){const z=ZONES[GRID2Z[gi]];REGIONS[gi]={n:z.n,d:z.d,z,b:z.i===0?null:{x:z.cx+1500,y:z.cy-1300}};}
 // base structures: cost is [[tier,amount],...]; 'where' is where your tank must be to build it
 const STRUCT={
   turret:{n:'Turret',cost:[[0,60],[1,20]],max:4,hp:520,r:17,where:'base',info:'Auto-cannon that guards your base.'},
@@ -465,32 +466,38 @@ function cloneDrain(a){return 4*Math.pow(0.85,S(a,'eff'));}
 // Everything here uses the seeded R, so every browser (host and guests) builds the same world, including the
 // zone environments (toxic clouds, lava pools, gravity rifts) that guests draw themselves.
 let env=[];const zoneNodes=[];
+// A free spot inside zone z: away from safe zones, boss routes, beacons, and other nodes, and clear of the zone's
+// edges. Returns null when there's no room (the caller then skips that node instead of dropping it anywhere).
 function randPos(z,minSafe=400){const Z=ZONES[z],x0=Z.g[0]*RSZ,y0=Z.g[1]*RSZ,near=zoneNodes[z]||(zoneNodes[z]=[]);
-  for(let k=0;k<300;k++){const p={x:x0+60+R()*(RSZ-120),y:y0+60+R()*(RSZ-120)};
+  for(let k=0;k<300;k++){const p={x:x0+150+R()*(RSZ-300),y:y0+150+R()*(RSZ-300)};
     if(SZ.some(s=>dist(p,s)<s.r+minSafe))continue;if(BCS.some(c=>dist(p,c)<800))continue;if(REGIONS.some(r=>r.b&&dist(p,r.b)<380))continue;
-    if(near.some(n=>dist(n,p)<200))continue;return p;}return {x:x0+R()*RSZ,y:y0+R()*RSZ};}
+    if(near.some(n=>dist(n,p)<260))continue;return p;}return null;}
 // each zone has its own mix of resource tiers
 function zoneTier(z,rf){const w=ZONES[z].tw;let r=rf(),i=0;for(;i<3;i++){r-=w[i];if(r<0)break;}return i;}
-function addNode(type,p,tier){const z=zoneAt(p);const n=mkNode(type,p.x,p.y,tier===undefined?zoneTier(z,R):tier);nodes.push(n);ents.push(n);(zoneNodes[z]||(zoneNodes[z]=[])).push(n);return n;}
+function addNode(type,p,tier){if(!p)return null;const z=zoneAt(p);const n=mkNode(type,p.x,p.y,tier===undefined?zoneTier(z,R):tier);nodes.push(n);ents.push(n);(zoneNodes[z]||(zoneNodes[z]=[])).push(n);return n;}
 function genZone(z){const Z=ZONES[z],c={x:Z.cx,y:Z.cy};
   // a starter ring of easy nodes around the zone's safe outpost
-  for(let i=0;i<8;i++){const a=i/8*TAU+0.3,d=520+R()*260;addNode('resource',{x:wr(c.x+Math.cos(a)*d),y:wr(c.y+Math.sin(a)*d)},z===0?0:undefined);}
+  for(let i=0;i<6;i++){const a=i/6*TAU+0.3,d=520+R()*200;addNode('resource',{x:wr(c.x+Math.cos(a)*d),y:wr(c.y+Math.sin(a)*d)},z===0?0:undefined);}
   addNode('heal',{x:c.x+700,y:c.y+420});addNode('electric',{x:c.x-760,y:c.y-380});addNode('swarm',{x:c.x+160,y:c.y+1050});
-  for(let i=0;i<300;i++)addNode('resource',randPos(z));
-  for(let i=0;i<50;i++)addNode('swarm',randPos(z,600));
-  const heal=Z.k==='meadow'?55:Z.k==='void'?12:32,elec=Z.k==='storm'?70:32;
+  // nodes are scarcer than before: about a fifth of the old count in a quarter of the space
+  for(let i=0;i<55;i++)addNode('resource',randPos(z));
+  for(let i=0;i<9;i++)addNode('swarm',randPos(z,600));
+  const heal=Z.k==='meadow'?12:Z.k==='void'?3:6,elec=Z.k==='storm'?14:6;
   for(let i=0;i<heal;i++)addNode('heal',randPos(z));
   for(let i=0;i<elec;i++)addNode('electric',randPos(z));
-  if(['crystal','storm','void'].includes(Z.k))for(let i=0;i<2;i++)addNode('anomaly',randPos(z,900));
-  const box=()=>({x:Z.g[0]*RSZ+R()*RSZ,y:Z.g[1]*RSZ+R()*RSZ}),clear=p=>!SZ.some(s=>dist(p,s)<s.r+500);
-  if(Z.k==='marsh')for(let i=0;i<55;i++){const p=box();if(clear(p))env.push({k:'cloud',x:p.x,y:p.y,r:180+R()*170,z});}
-  if(Z.k==='volcano')for(let i=0;i<45;i++){const p=box();if(clear(p))env.push({k:'lava',x:p.x,y:p.y,r:110+R()*150,z});}
-  if(Z.k==='void')for(let i=0;i<16;i++){const p=box();if(clear(p))env.push({k:'rift',x:p.x,y:p.y,r:520,z});}
-  if(Z.k==='snow')for(let i=0;i<60;i++){const p=box();env.push({k:'drift',x:p.x,y:p.y,r:120+R()*200,z});}
-  if(Z.k==='desert')for(let i=0;i<50;i++){const p=box();env.push({k:'dune',x:p.x,y:p.y,r:300+R()*400,z});}}
+  if(['crystal','storm','void'].includes(Z.k))addNode('anomaly',randPos(z,700));
+  // hazards stay inside their zone and off safe zones, boss routes, and beacons
+  const box=m=>({x:Z.g[0]*RSZ+m+R()*(RSZ-2*m),y:Z.g[1]*RSZ+m+R()*(RSZ-2*m)});
+  const clear=(p,r)=>!SZ.some(s=>dist(p,s)<s.r+r+200)&&!BCS.some(b=>dist(p,b)<r+700)&&!REGIONS.some(g=>g.b&&dist(p,g.b)<r+300);
+  const place=(k,n,rf)=>{for(let i=0;i<n;i++){const r=rf();for(let t=0;t<30;t++){const p=box(r);if(k==='drift'||k==='dune'||clear(p,r)){env.push({k,x:p.x,y:p.y,r,z});break;}}}};
+  if(Z.k==='marsh')place('cloud',14,()=>180+R()*150);
+  if(Z.k==='volcano')place('lava',11,()=>110+R()*130);
+  if(Z.k==='void')place('rift',4,()=>420);
+  if(Z.k==='snow')place('drift',15,()=>120+R()*180);
+  if(Z.k==='desert')place('dune',12,()=>300+R()*300);}
 function genWorld(){
   for(let z=0;z<9;z++)genZone(z);
-  for(let i=0;i<45*9;i++)spawnMini(true);
+  for(let i=0;i<12*9;i++)spawnMini(true);
   ZONES.forEach((Z,z)=>{const b=mkBoss(z);bosses.push(b);ents.push(b);});
   // two shuttles loop the Meadow's posts, two more loop the outposts of the outer zones
   const outer=SZ.map((s,i)=>i).filter(i=>i>=5);
@@ -499,6 +506,7 @@ function genWorld(){
 }
 function spawnMini(initial){for(let k=0;k<80;k++){const p={x:rnd()*W,y:rnd()*W};
   if(SZ.some(z=>dist(p,z)<z.r+500))continue;if(pls.some(q=>q.tank&&dist(p,q.tank)<1300))continue;if(initial&&dist(p,SZ[0])<1300)continue;
+  if(nodes.some(n=>!n.down&&dist(p,n)<n.r+60))continue; // don't spawn inside a node
   ents.push(mkMini(p.x,p.y));return;}}
 
 // ================= damage / death =================
@@ -640,7 +648,7 @@ function updTank(t,dt){
   if(t.isBase){let em=1;for(const a of engs)em*=1.25+0.12*S(a,'force');t.engMul=em;}
   const zk=ZONES[zoneAt(t)].k,local=t.native===zoneAt(t);
   if(zk==='ocean'&&!local)drag*=0.55; // slippery water
-  t.drag=drag;
+  t.drag=drag;t.acc=force/t.mass; // guests use these to predict their own movement
   let m=Math.hypot(inp.mx,inp.my);if(m>1){inp.mx/=m;inp.my/=m;m=1;}
   // dash jets: a short burst in the move direction (or the aim, when standing still); untouchable while it lasts
   if(t.dashCd>0)t.dashCd-=dt;
@@ -2141,7 +2149,9 @@ const PKEY='augtanks_profile';
 // and get back what's near them 20 times a second. Nothing a guest sends is run or inserted as HTML.
 const PEER_PREFIX='augtanks-v2-',CODE_CH='ABCDEFGHJKMNPQRSTUVWXYZ23456789',MAX_PLAYERS=8;
 let nextPlId=1,fxSeq=0;
-const G={id:null,ents:new Map(),soc:null,inv:null,me:null,sendT:0,
+// hist: inputs we've sent (for measuring round-trip time). rtt: smoothed round trip in ms. cx/cy: correction still to apply.
+const G={id:null,ents:new Map(),soc:null,inv:null,me:null,sendT:0,hist:[],rtt:0,cx:0,cy:0,predOn:false,seq:0,
+
   self:{x:HALF,y:HALF+70,vx:0,vy:0,r:20,dead:true,respawnT:0,fill:PCOL,aim:0,alpha:1,augs:[],parts:[],drones:[],carry:[0,0,0,0],cargo:[],
     input:{mx:0,my:0,fire:false},hp:1,maxHp:1,sh:0,shMax:0,bat:1,batMax:1,heat:0,team:'p',isPlayer:true,kind:'tank'}};
 const clampNum=(v,a,b,def)=>{v=+v;return Number.isFinite(v)?Math.max(a,Math.min(b,v)):def;};
@@ -2152,7 +2162,7 @@ function showRoom(code){const r=$('room');r.hidden=false;r.innerHTML='Room <span
 function peerLib(){if(!window.Peer){joinMsg('The multiplayer library didn’t load. Check your internet connection and reload.');return false;}
   if(location.protocol==='file:'&&!window.RTCPeerConnection){joinMsg('This browser can’t do multiplayer from a local file. Open the game in Chrome, Edge, or Firefox.');return false;}return true;}
 // Everyone must run the same game file: the world is built from it. Bump this whenever the game changes.
-const NET_VER='2026-09-25d';
+const NET_VER='2026-09-25f';
 // ---- connection routes (ICE) ----
 // STUN finds a direct route between players. When a network blocks that, a TURN relay carries the traffic instead.
 // PeerJS's built-in free relay is down, so players can add their own (stored only in this browser).
@@ -2288,7 +2298,7 @@ function removeGuest(q){if(!pls.includes(q))return;leaveParty(q,true);pls.splice
   for(const b of beacons)if(b.pl===q){const heir=pls.find(p=>!p.offline&&sameSide(p,q)&&p!==q);if(heir){b.pl=heir;b.fill=heir.color;}else neutralBeacon(b);}
   sysChat(`${q.name} left`);}
 function handleGuest(q,m){switch(m.t){
-  case 'in':{const t=q.tank,i=t.input;i.mx=clampNum(m.mx,-1,1,0);i.my=clampNum(m.my,-1,1,0);i.btns=clampNum(m.b,0,511,0)|0;i.latch=(i.latch||0)|i.btns;i.fire=(i.btns&(BTN.lmb|BTN.space))!==0;
+  case 'in':{const t=q.tank,i=t.input;if(Number.isInteger(m.s))q.seq=m.s;i.mx=clampNum(m.mx,-1,1,0);i.my=clampNum(m.my,-1,1,0);i.btns=clampNum(m.b,0,511,0)|0;i.latch=(i.latch||0)|i.btns;i.fire=(i.btns&(BTN.lmb|BTN.space))!==0;
     if(Number.isFinite(+m.a))t.aim=+m.a;q.view=clampNum(m.v,300,1400,900);i.hasMouse=m.m===1;
     if(i.hasMouse){i.wx=wr(clampNum(m.wx,-W,2*W,0));i.wy=wr(clampNum(m.wy,-W,2*W,0));}break;}
   case 'chat':{const s=cleanText(m.m,140);const now=performance.now();if(!s||now-q.chatT<600)return;q.chatT=now;hostChat(q,s);break;}
@@ -2302,6 +2312,8 @@ function handleGuest(q,m){switch(m.t){
 const r0=v=>Math.round(v),r2=v=>Math.round(v*100)/100;
 function serAug(a){const o={uid:a.uid,type:a.type,lvl:a.lvl,st:a.st};if(a.bind)o.bind=a.bind;if(a.mod)o.mod=a.mod;if(a.bay)o.bay=serAug(a.bay);return o;}
 function serE(e){const o={i:e.id,k:e.kind,x:r0(e.x),y:r0(e.y),r:e.r,f:e.fill,h:r2(e.hp/e.maxHp),ro:r2(e.rot||0)};
+  // speed, so guests can project where moving things are right now rather than where they were
+  if(!e.static&&(Math.abs(e.vx)>2||Math.abs(e.vy)>2)){o.vx=r0(e.vx);o.vy=r0(e.vy);}
   if(e.heat>0.5)o.ht=r0(e.heat);if(T-e.hitT<0.08)o.fl=1;if(e.down)o.dn=1;if(e.team!=='n')o.tm=e.team;if(e.pl)o.pid=e.pl.id;
   if(e.kind==='node'){o.nt=e.ntype;o.ti=e.tier;}
   else if(e.kind==='bus'){o.w=e.w;o.hh=e.h;}
@@ -2330,6 +2342,8 @@ function socialOf(q){return {roster:roster(),inv:q.invites.slice(),sent:pls.filt
 function meOf(q){const t=q.tank,b=q.base,cd={};for(const a of t.augs)if(a._cd>0.05)cd[a.uid]=r2(a._cd);
   const lk=q.lock?(q.lock.e?{i:q.lock.e.id}:{x:r0(q.lock.x),y:r0(q.lock.y)}):null;
   return {id:t.id,x:r0(t.x),y:r0(t.y),hp:r2(t.hp),mh:t.maxHp,sh:r2(t.sh),sm:t.shMax,bt:r2(t.bat),bm:t.batMax,ht:r2(t.heat),cd,lk,rc:q.recall,
+  // prediction data: the last input the host applied, and the tank's exact motion and handling
+  sq:q.seq|0,px:r2(t.x),py:r2(t.y),pvx:r2(t.vx),pvy:r2(t.vy),ac:r0(t.acc||1200),dg:r2(t.drag||4),
   tg:Object.fromEntries(t.augs.filter(a=>a.type==='clone'&&(a._act||a._lock)).map(a=>[a.uid,a._act?1:2])),
   jobs:q.contracts.map(c=>({n:c.n,need:c.need,have:c.have,lvl:c.lvl,reward:c.reward})),es:t.ess,fd:[...q.found],cold:r0(t.cold||0),psn:r0(t.poison||0),
   c:t.carry,cg:t.cargo.length,ab:t.aboard?1:0,d:t.dead?1:0,rt:r2(t.respawnT),base:b?{x:r0(b.x),y:r0(b.y),pr:basePickR(b)}:null};}
@@ -2416,8 +2430,11 @@ function onSnap(m){G.lastSnap=performance.now();
   const d=m.me||{};const selfId=d.id;const seen=new Set(),list=[];
   for(const o of Array.isArray(m.e)?m.e:[]){let e=G.ents.get(o.i);
     if(!e){e={id:o.i,kind:o.k,x:o.x,y:o.y,vx:0,vy:0,hitT:-9,spin:o.sp||0,aim:o.a||0,alpha:1,augs:[],parts:[],drones:[],solid:true,input:{mx:0,my:0,fire:false}};G.ents.set(o.i,e);}
-    else if(Math.abs(wd(e.x,o.x))>400||Math.abs(wd(e.y,o.y))>400){e.x=o.x;e.y=o.y;}
-    e.tx=o.x;e.ty=o.y;e.r=o.r;e.fill=o.f;e.hp=o.h;e.maxHp=1;e.rot=o.ro;e.heat=o.ht||0;if(o.fl)e.hitT=T;e.down=o.dn?1:0;e.team=o.tm||'n';e.pid=o.pid;
+    else if(o.i!==selfId&&(Math.abs(wd(e.x,o.x))>400||Math.abs(wd(e.y,o.y))>400)){e.x=o.x;e.y=o.y;}
+    // aim a little ahead: where it is now, not where it was when the host sent this
+    e.svx=o.vx||0;e.svy=o.vy||0;const lead=Math.min(0.25,(G.rtt||100)/2000+0.03);
+    if(o.i!==selfId||!predicting(d)){e.tx=wr(o.x+e.svx*lead);e.ty=wr(o.y+e.svy*lead);}
+    e.r=o.r;e.fill=o.f;e.hp=o.h;e.maxHp=1;e.rot=o.ro;e.heat=o.ht||0;if(o.fl)e.hitT=T;e.down=o.dn?1:0;e.team=o.tm||'n';e.pid=o.pid;
     if(o.k==='node'){e.ntype=o.nt;e.tier=o.ti|0;}else if(o.k==='bus'){e.w=o.w;e.h=o.hh;}
     else if(o.k==='tri'){e.big=!!o.bg;e.sides=o.sd===undefined?3:o.sd|0;}else if(o.k==='drone')e.alpha=o.al===undefined?1:+o.al;else if(o.k==='beacon'){e.ri=o.ri|0;e.cap=+o.cp||0;e.aim=o.a;e.blk=o.bk|0;}else if(o.k==='struct'){e.stype=own(STRUCT,o.st)?o.st:'turret';e.aim=o.a;}
     else if(o.k==='boss'){const z=Math.max(0,Math.min(8,o.bz|0));e.bt=BOSSES[z].k;e.z=z;e.name=BOSSES[z].n;e.alpha=o.al===undefined?1:+o.al;e.beams=Array.isArray(o.bm)?o.bm.map(Number):null;}
@@ -2443,23 +2460,64 @@ function onSnap(m){G.lastSnap=performance.now();
   // my own tank: the snapshot copy when alive, a stand-in while rebuilding
   G.me=d;const mine=G.ents.get(selfId);const p=mine||G.self;
   if(!mine){p.x=d.x??p.x;p.y=d.y??p.y;}
+  // Reconcile our predicted tank with the host. The host's copy trails ours by about one round trip, so project it
+  // forward by the measured round-trip time and ease toward that. Big gaps (teleport, respawn, warp) snap there.
+  const h=G.hist.find(x=>x.s===d.sq);
+  if(h){const s=performance.now()-h.t;G.rtt=G.rtt?G.rtt*0.85+s*0.15:s;}
+  G.hist=G.hist.filter(x=>x.s>d.sq);
+  if(mine&&predicting(d)){const lag=Math.min(0.4,(G.rtt||100)/1000),tx=wr(d.px+d.pvx*lag),ty=wr(d.py+d.pvy*lag);
+    if(!G.predOn){mine.x=tx;mine.y=ty;mine.vx=d.pvx;mine.vy=d.pvy;G.cx=G.cy=0;G.predOn=true;}
+    else{const ex=wd(mine.x,tx),ey=wd(mine.y,ty),e=Math.hypot(ex,ey);
+      if(e>300){mine.x=tx;mine.y=ty;mine.vx=d.pvx;mine.vy=d.pvy;G.cx=G.cy=0;G.snaps=(G.snaps||0)+1;G.snapErr=Math.round(e);}
+      else if(e>4){G.cx=ex;G.cy=ey;mine.vx+=(d.pvx-mine.vx)*0.15;mine.vy+=(d.pvy-mine.vy)*0.15;}}}
+  else G.predOn=false;
   if(player&&player!==p){p.aim=player.aim;p.input=player.input;}
   Object.assign(p,{hp:d.hp,maxHp:d.mh||1,sh:d.sh||0,shMax:d.sm||0,bat:d.bt,batMax:d.bm||1,heat:d.ht||0,carry:Array.isArray(d.c)?d.c:[0,0,0,0],
     cargo:new Array(Math.max(0,Math.min(99,d.cg|0))),aboard:!!d.ab,dead:!!d.d,respawnT:+d.rt||0,isPlayer:true,
     ess:ZONES.map((z,i)=>+((d.es||[])[i])||0),cold:+d.cold||0,poison:+d.psn||0});
   player=p;base=d.base?{x:+d.base.x,y:+d.base.y,pickR:+d.base.pr||260,isBase:true}:null;if(G.inv)store=G.inv.store;}
-function clientStep(dt){T+=dt;const k=Math.min(1,dt*14);
+const PRED_SOLID=['node','beacon','struct','base','tank','boss','convoy','chunk'];
+// our own tank is predicted locally while alive and not riding a shuttle (the host moves riders)
+function predicting(d){return !!d&&!d.d&&!d.ab;}
+function clientStep(dt){T+=dt;const k=Math.min(1,dt*12);
   if(G.lastSnap&&performance.now()-G.lastSnap>8000&&!document.hidden){NET.dead=true;try{NET.conn.close();}catch(_){}lostConnection();return;}
-  for(const e of ents){if(e.tx===undefined)continue;e.x=wr(e.x+wd(e.x,e.tx)*k);e.y=wr(e.y+wd(e.y,e.ty)*k);if(e.augs.some(a=>a.type==='shredder'))e.spin+=dt*6;}
+  const pred=G.predOn&&player!==G.self&&predicting(G.me);
+  // everything else: keep projecting along its last known speed and glide toward that
+  for(const e of ents){if(e.tx===undefined||(pred&&e===player))continue;
+    if(e.svx||e.svy){e.tx=wr(e.tx+e.svx*dt);e.ty=wr(e.ty+e.svy*dt);}
+    e.x=wr(e.x+wd(e.x,e.tx)*k);e.y=wr(e.y+wd(e.y,e.ty)*k);if(e.augs.some(a=>a.type==='shredder'))e.spin+=dt*6;}
   for(const b of bullets){b.x=wr(b.x+b.vx*dt);b.y=wr(b.y+b.vy*dt);}
   tickFx(dt);
   if(!player.dead)readInput();else{player.input.mx=0;player.input.my=0;player.input.fire=false;player.input.btns=0;}
+  if(pred)predictSelf(player,dt);
   // quick taps between sends still count: buttons pressed since the last send are included
   G.latch|=player.input.btns||0;
-  G.sendT+=dt;if(G.sendT>=(NET.conn&&NET.conn.relay?0.1:0.05)){G.sendT=0;const i=player.input;
-    netSend({t:'in',mx:r2(i.mx),my:r2(i.my),a:Math.round(player.aim*1000)/1000,b:G.latch|(i.btns||0),v:Math.round(Math.max(VW,VH)/2),
+  // send on a steady beat, and right away whenever the controls change (so turns and shots start sooner)
+  const i=player.input,relay=NET.conn&&NET.conn.relay,sig=r2(i.mx)+','+r2(i.my)+','+(i.btns||0);
+  G.sendT+=dt;const due=G.sendT>=(relay?0.1:0.05),changed=sig!==G.lastSig&&G.sendT>=(relay?0.05:1/60);
+  if(due||changed){G.sendT=0;G.lastSig=sig;G.seq=(G.seq||0)+1;G.hist.push({s:G.seq,x:player.x,y:player.y,t:performance.now()});if(G.hist.length>90)G.hist.shift();
+    netSend({t:'in',s:G.seq,mx:r2(i.mx),my:r2(i.my),a:Math.round(player.aim*1000)/1000,b:G.latch|(i.btns||0),v:Math.round(Math.max(VW,VH)/2),
       m:i.hasMouse?1:0,wx:Math.round(i.wx||0),wy:Math.round(i.wy||0)});G.latch=0;}
   cam.x=player.x;cam.y=player.y;}
+// Local movement prediction: the same thrust, drag, cold slowdown, and dash the host uses, so your tank responds
+// instantly. Corrections from the host (G.cx, G.cy) are eased in over a few frames.
+function predictSelf(p,dt){const d=G.me,i=p.input;let mx=i.mx||0,my=i.my||0;const m=Math.hypot(mx,my);if(m>1){mx/=m;my/=m;}
+  const dj=G.inv&&G.inv.tank.augs.find(a=>a.type==='dash');
+  if(dj){G.dcd=Math.max(0,(G.dcd||0)-dt);const bits=bindBits(bindOf(dj)),down=((i.btns||0)&bits)!==0;
+    if(down&&!G.dprev&&G.dcd<=0&&!((d.cd||{})[dj.uid]>0.1)){const ang=m>0.2?Math.atan2(my,mx):p.aim,len=260+60*S(dj,'dist');
+      G.dashT=0.18;G.dashV={x:Math.cos(ang)*len/0.18,y:Math.sin(ang)*len/0.18};G.dcd=Math.max(1.5,5-0.5*S(dj,'cool'));}
+    G.dprev=down;}
+  if(G.dashT>0){G.dashT-=dt;p.vx=G.dashV.x;p.vy=G.dashV.y;if(G.dashT<=0){p.vx*=0.3;p.vy*=0.3;}}
+  else{const acc=d.ac||1200;p.vx+=mx*acc*dt;p.vy+=my*acc*dt;const kd=Math.exp(-(d.dg||4)*dt);p.vx*=kd;p.vy*=kd;}
+  const sl=1-0.5*Math.min(1,(p.cold||0)/100);p.x=wr(p.x+p.vx*dt*sl);p.y=wr(p.y+p.vy*dt*sl);
+  // bump off solid things locally too, so the predicted tank doesn't drive through rocks, bases, or other tanks
+  for(const e of ents){if(e===p||e.down||!e.r||!PRED_SOLID.includes(e.kind)||e.alpha<0.3)continue;
+    const dx=wd(e.x,p.x),dy=wd(e.y,p.y),rr=e.r+p.r;if(dx>rr||dx<-rr||dy>rr||dy<-rr)continue;const dd=Math.hypot(dx,dy);if(dd>=rr||dd<0.01)continue;
+    const nx=dx/dd,ny=dy/dd;p.x=wr(p.x+nx*(rr-dd));p.y=wr(p.y+ny*(rr-dd));const vn=p.vx*nx+p.vy*ny;if(vn<0){p.vx-=vn*nx;p.vy-=vn*ny;}}
+  // ease corrections in gently, never more than a few pixels a frame, so they don't show as snaps
+  let cx=(G.cx||0)*Math.min(1,dt*5),cy=(G.cy||0)*Math.min(1,dt*5);const cm=Math.hypot(cx,cy),cap=180*dt;if(cm>cap){cx*=cap/cm;cy*=cap/cm;}
+  p.x=wr(p.x+cx);p.y=wr(p.y+cy);G.cx-=cx;G.cy-=cy;
+  p.tx=p.x;p.ty=p.y;}
 
 // ================= boot =================
 let started=false,myName='',myColor=COLORS[0];
@@ -2511,7 +2569,7 @@ document.addEventListener('visibilitychange',()=>{last=performance.now();});
 // guests keep pinging even from a background tab so the host knows they're still here
 setInterval(()=>{if(isGuest()&&!NET.dead)netSend({t:'ping'});},1000);
 window.__AT={step,render,get player(){return player},get base(){return base},get ents(){return ents},get store(){return store},get pickups(){return pickups},get bullets(){return bullets},
-  get pls(){return pls},get me(){return me},dbg:{dropAug,kill,hurt,newAug,joinRelay:c=>{myName=cleanText($('nameIn').value,16)||'Tester';startJoinRelay(c,'blocked');},startEvent,buildStruct,setLock,startRecall,progress,get events(){return events},get beacons(){return beacons},get structs(){return structs},get wells(){return wells},get strikes(){return strikes},get mines(){return mines},get env(){return env},set evT(v){evT=v}},get G(){return G},build(){btnBase.click();},doParty,doMenu,addGuestForTest(n,c){const q=mkPl(nextPlId++,n,c);pls.push(q);const s=spawnPoint();q.tank=mkPlayerTank(q,s.x,s.y);ents.push(q.tank);return q;}};
+  get pls(){return pls},get me(){return me},dbg:{dropAug,kill,hurt,newAug,clientStep:dt=>clientStep(dt),get NET(){return NET},joinRelay:c=>{myName=cleanText($('nameIn').value,16)||'Tester';startJoinRelay(c,'blocked');},startEvent,buildStruct,setLock,startRecall,progress,get events(){return events},get beacons(){return beacons},get structs(){return structs},get wells(){return wells},get strikes(){return strikes},get mines(){return mines},get env(){return env},get nodes(){return nodes},get bosses(){return bosses},get buses(){return buses},SZ,BCS,REGIONS,ZONES,W,RSZ,zoneAt,set evT(v){evT=v}},get G(){return G},build(){btnBase.click();},doParty,doMenu,addGuestForTest(n,c){const q=mkPl(nextPlId++,n,c);pls.push(q);const s=spawnPoint();q.tank=mkPlayerTank(q,s.x,s.y);ents.push(q.tank);return q;}};
 })();
 </script>
 </body>
