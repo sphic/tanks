@@ -152,7 +152,9 @@ button{font:inherit;color:inherit}
     <h2>Augment Tanks v2</h2>
     <div id="joinForm">
       <h3>Your tank</h3>
-      <div class="row"><input id="nameIn" class="field" maxlength="16" placeholder="Tank name" autocomplete="off" style="flex:1"></div>
+      <div class="row"><input id="nameIn" class="field" maxlength="16" placeholder="Tank name" autocomplete="off" style="flex:1">
+        <input id="pwIn" class="field" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="4-digit password" autocomplete="off" style="width:150px"></div>
+      <p class="empty-note" style="margin-top:4px">The password is optional. If you get disconnected, join the same room with the same name and password to take your tank back from any device.</p>
       <h3>Color</h3>
       <div class="swatches" id="swatches" role="radiogroup" aria-label="Tank color"></div>
       <h3>Play</h3>
@@ -173,7 +175,7 @@ button{font:inherit;color:inherit}
     <ul>
       <li>Left thumb drives, right thumb aims and fires. On desktop use WASD and the mouse.</li>
       <li>Every augment has its own shape on a tank, so you can read a mini boss before you fight it.</li>
-      <li>Lasers and particles fight on their own. Aim toward what you want them on; aim away and they let go.</li>
+      <li>Lasers fight on their own: aim toward what you want them on, aim away and they let go. Arcane Wisps hunt on their own too, and go for whatever is near your mouse while you fire.</li>
       <li>Amber triangles are wild. They attack everyone, including mini bosses.</li>
       <li>Your base collects drops in its range. Upgrade HP, defense, and range in its menu.</li>
       <li>Dashed circles are safe zones, and the yellow shuttles connect them.</li>
@@ -181,9 +183,10 @@ button{font:inherit;color:inherit}
       <li>Drones collect drops. Put an augment in their bay and they fight with it at 25% strength. Right-click to send them at something.</li>
       <li>The map has eight regions around the hub. Capture a region's beacon by holding its ring for 12 seconds; it pays out and defends you.</li>
       <li>World events pop up every few minutes: convoys, meteor showers, rifts, and sieges. Contracts (C) give you goals and rewards.</li>
-      <li>Build turrets, extractors, a refinery, and a repair pylon from your base or inventory. H teleports you home after 3 seconds standing still.</li>
+      <li>Tanks start with 1 augment slot; buy more at your base. The workshop only builds augments whose blueprint you have (you start with the Gun). Feed a Research Lab resources for a chance at new blueprints, and salvaging an augment gives 25% toward its blueprint.</li>
+      <li>Build turrets, extractors, a refinery, a repair pylon, and a research lab from your base or inventory. H teleports you home after 3 seconds standing still.</li>
       <li>Every zone has its own boss, tougher in each zone: from the Elder Thornback in the Meadow to the Hollow King in the Void. Bosses drop big loot and return after a few minutes.</li>
-      <li>Legendaries: Singularity (zone bosses, always from zones 7-9), Orbital Lance (supply convoys), Particle Engine (anomaly shapes). Rift horrors can drop any of them.</li>
+      <li>Legendaries: Singularity (zone bosses, always from zones 7-9), Orbital Lance (supply convoys), Arcane Wisps (anomaly shapes), Shadow Clone (the Void boss, sometimes other bosses from zone 3 up). Rift horrors can drop any of them.</li>
       <li>The world has nine biome zones, each harder and richer than the last: Meadow, Dunes, Ocean, Tundra, Marsh, Caverns, Volcano, Storm, and Void. Each has its own hazards and enemies.</li>
       <li>Zones drop essence (colored diamonds). At your base, spend it to infuse an augment with that zone's power: frost chills, scorch burns, venom poisons, and more.</li>
       <li>Visit a zone's outpost to unlock it for warping (G) from any safe zone. Bases are heavy but movable: push, grapple, or tow them.</li>
@@ -209,7 +212,7 @@ const NODECOL={swarm:'#e0566b',heal:'#4fd28a',electric:'#58b6ff',anomaly:'#d9a6f
 const CATCOL={weapon:'#ff8a5b',defense:'#4fc3ff',utility:'#b58cff',unique:'#f3c24f'};
 const LV=[[1,4],[3,9],[8,14],[12,20]];
 const POOL=['gun','gun','laser','lightning','drones','shredder','shield','healing','grapple','stealth','engine','missiles','dash','magnet',
-  'sword','beamsword','flamer','railgun','mines','reflector','clone'];
+  'sword','beamsword','flamer','railgun','mines','reflector'];
 const WEAPONS=['gun','laser','lightning','shredder','missiles','sword','beamsword','flamer','railgun','mines'];
 // bind: which button fires it by default. 'auto' works on its own, 'pri' is left click / Space, 'always' is passive.
 // bay: can it go in a drone bay (at 25% strength)?
@@ -233,15 +236,18 @@ const AUG={
   railgun:{n:'Railgun',ab:'RAIL',cat:'weapon',size:1,bat:1,bind:'pri',ups:{dmg:'Damage',charge:'Charge speed',range:'Range'}},
   mines:{n:'Mine Layer',ab:'MINE',cat:'weapon',size:1,bind:'q',ups:{dmg:'Blast',count:'Max mines',radius:'Radius'}},
   reflector:{n:'Reflector',ab:'RFL',cat:'defense',size:1,bind:'always',ups:{chance:'Reflect chance',power:'Return power'}},
-  clone:{n:'Shadow Clone',ab:'CLN',cat:'utility',size:1,bat:1,bind:'r',ups:{eff:'Energy efficiency',count:'Clones',power:'Power'}},
+  clone:{n:'Shadow Clone',ab:'CLN',cat:'utility',size:1,unique:1,bat:1,bind:'r',ups:{eff:'Energy efficiency',count:'Clones',power:'Power'}},
   singularity:{n:'Singularity',ab:'SNG',cat:'weapon',size:2,unique:1,bind:'e',ups:{pull:'Pull',dur:'Duration',dmg:'Crush damage'}},
   orbital:{n:'Orbital Lance',ab:'ORB',cat:'weapon',size:2,unique:1,bind:'q',ups:{dmg:'Damage',radius:'Blast radius',cool:'Recharge'}},
-  particle:{n:'Particle Engine',ab:'PRT',cat:'weapon',size:3,unique:1,bind:'auto',ups:{count:'Particles',heat:'Heat damage',speed:'Intercept speed'}},
+  particle:{n:'Arcane Wisps',ab:'WSP',cat:'weapon',size:3,unique:1,bind:'always',ups:{count:'Wisps',power:'Starbolt power',weave:'Sigil weave'}},
 };
 // every augment except Drones itself fits in a drone bay (drones use it at 25% strength, see droneAttack/updDrone)
 for(const k in AUG)if(k!=='drones')AUG[k].bay=1;
+// every normal augment can be built in the workshop once its blueprint is researched: [tier, amount]
+Object.entries({laser:[1,50],lightning:[1,45],drones:[1,55],shredder:[0,45],stealth:[1,45],beamsword:[2,25],railgun:[2,30],mines:[1,40],reflector:[1,50]})
+  .forEach(([k,c])=>{AUG[k].craft=c;});
 // where each legendary comes from (shown in the help and on the item)
-const LEGEND_SRC={singularity:'Dropped by zone bosses (always from zones 7-9, sometimes from zones 4-6)',orbital:'Carried by supply convoys (world event)',particle:'Falls out of rare anomaly shapes'};
+const LEGEND_SRC={singularity:'Dropped by zone bosses (always from zones 7-9, sometimes from zones 4-6)',orbital:'Carried by supply convoys (world event)',particle:'Falls out of rare anomaly shapes',clone:'Dropped by the Void boss, and sometimes by other zone bosses from zone 3 up'};
 // buttons an augment can be bound to (mouse + keyboard). Bits are sent over the network as one number.
 const BTN={lmb:1,rmb:2,space:4,shift:8,q:16,e:32,f:64,r:128,mmb:256};
 const BIND_OPTS=[['pri','Left click / Space'],['lmb','Left click'],['rmb','Right click'],['mmb','Middle click'],['space','Space'],['shift','Shift'],['q','Q'],['e','E'],['f','F'],['r','R'],['auto','Automatic'],['always','Always on']];
@@ -295,10 +301,11 @@ const BCS=ZONES.map(Z=>({x:Z.cx-1650,y:Z.cy-1550}));
 const REGIONS=[];for(let gi=0;gi<9;gi++){const z=ZONES[GRID2Z[gi]];REGIONS[gi]={n:z.n,d:z.d,z,b:z.i===0?null:{x:z.cx+1500,y:z.cy-1300}};}
 // base structures: cost is [[tier,amount],...]; 'where' is where your tank must be to build it
 const STRUCT={
-  turret:{n:'Turret',cost:[[0,60],[1,20]],max:4,hp:520,r:17,where:'base',info:'Auto-cannon that guards your base.'},
-  extractor:{n:'Extractor',cost:[[0,80],[1,30]],max:3,hp:420,r:19,where:'node',info:'Build next to a resource node. Mines it into your storage every 10s, anywhere on the map.'},
-  refinery:{n:'Refinery',cost:[[1,60],[2,20]],max:1,hp:600,r:23,where:'base',info:'Every 20s turns 30 of a lower tier into 6 of the next tier.'},
-  pylon:{n:'Repair Pylon',cost:[[1,50],[2,15]],max:1,hp:520,r:17,where:'base',info:'Repairs you, your party, and your structures near your base.'}};
+  turret:{n:'Turret',cost:[[0,60],[1,20]],max:4,hp:520,r:17,mass:60,where:'base',info:'Auto-cannon that guards your base.'},
+  extractor:{n:'Extractor',cost:[[0,80],[1,30]],max:3,hp:420,r:19,mass:80,where:'node',info:'Build next to a resource node. Mines it into your storage every 10s, anywhere on the map, while it stays next to its node.'},
+  refinery:{n:'Refinery',cost:[[1,60],[2,20]],max:1,hp:600,r:23,mass:120,where:'base',info:'Every 20s turns 30 of a lower tier into 6 of the next tier.'},
+  pylon:{n:'Repair Pylon',cost:[[1,50],[2,15]],max:1,hp:520,r:17,mass:60,where:'base',info:'Repairs you, your party, and your structures near it.'},
+  lab:{n:'Research Lab',cost:[[0,70],[1,20]],max:1,hp:500,r:21,mass:100,where:'base',info:'Feed it resources for a chance to unlock augment blueprints.'}};
 
 // ================= helpers =================
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
@@ -328,7 +335,10 @@ function usedSlots(t){let s=0;for(const a of t.augs)s+=AUG[a.type].size;return s
 function freeSlots(t){return t.slots-usedSlots(t);}
 function augTier(a){return Math.floor((a.lvl-1)/5);}
 // levels 2-5 iron, 6-10 silver, 11-15 gold, 16-20 platinum; legendaries start two tiers higher
-function costFor(n,uniq){let tier=Math.floor((n-1)/5);if(uniq)tier=Math.min(3,tier+2);return {tier,amt:20+15*((n-1)%5)};}
+// Cost of reaching level n: 20→80 of a resource over five levels, then the next resource. Legendaries start two
+// resources higher. Once platinum is reached the price keeps climbing instead of starting over at 20.
+function costFor(n,uniq){const s=(n-1)+(uniq?10:0),tier=Math.min(3,Math.floor(s/5));
+  return {tier,amt:tier<3?20+15*(s%5):20+15*(s-15)};}
 function refundOf(a){const r=[0,0,0,0];const u=!!AUG[a.type].unique;for(let n=2;n<=a.lvl;n++){const c=costFor(n,u);r[c.tier]+=c.amt;}return r;}
 function salvageOf(a){const d=AUG[a.type];const r=refundOf(a);if(d.unique)r[3]+=25;else if(d.craft)r[d.craft[0]]+=Math.round(d.craft[1]*.6);else r[0]+=20;
   if(a.bay)salvageOf(a.bay).forEach((v,i)=>r[i]+=v);return r;}
@@ -349,7 +359,7 @@ function describe(a){const s=k=>S(a,k);switch(a.type){
   case 'railgun':return `Hold to charge (${(1.4*Math.pow(0.88,s('charge'))).toFixed(1)}s for full), release to fire a slug that pierces everything in a ${700+100*s('range')} line for up to ${60+25*s('dmg')} damage. Uses battery.`;
   case 'mines':return `Drops a mine behind you. Mines arm after half a second and blow up for ${55+20*s('dmg')} in a ${90+15*s('radius')} radius when an enemy gets close. Up to ${5+2*s('count')} at once.`;
   case 'reflector':return `${Math.round(100*Math.min(0.7,0.2+0.06*s('chance')))}% chance to bounce an incoming bullet back at ${Math.round(100*(0.8+0.1*s('power')))}% power.`;
-  case 'clone':return `Press to toggle on or off. While on, keeps up to ${cloneMax(a)} shadow clone${cloneMax(a)>1?'s':''} of your tank fighting beside you with your weapons at ${Math.round(100*(0.3+0.08*s('power')))}% power; fallen clones come back after 2s. Each clone drains ${cloneDrain(a).toFixed(1)} battery/s. If your battery runs dry they vanish, and you can't turn them back on until you're at 20% battery.`;
+  case 'clone':return `Press to toggle on or off. While on, keeps up to ${cloneMax(a)} shadow clone${cloneMax(a)>1?'s':''} of your tank fighting beside you with your weapons at ${Math.round(100*(0.3+0.08*s('power')))}% power. When you attack by hand they copy you, firing the same weapons at where you aim; otherwise they pick their own targets. Fallen clones come back after 2s. Each clone drains ${cloneDrain(a).toFixed(1)} battery/s. If your battery runs dry they vanish, and you can't turn them back on until you're at 20% battery.`;
   case 'lightning':return `${14+5*s('dmg')} per zap, jumps to ${2+s('chain')} targets every ${(1.1*Math.pow(0.9,s('rate'))).toFixed(2)}s. Uses battery.`;
   case 'missiles':return `Fires ${2+s('count')} homing missiles every ${(1.8*Math.pow(0.9,s('rate'))).toFixed(2)}s, ${16+5*s('dmg')} damage each.`;
   case 'drones':return `${2+s('count')} drones that collect drops within ${droneRange(a,false)} (${droneRange(a,true)} on a base), +${12*s('spd')}% speed. They only fight when an augment is in their drone bay, at 25% strength.${a.bay?` Bay: ${AUG[a.bay.type].n} Lv ${a.bay.lvl}.`:' Bay: empty.'}`;
@@ -363,7 +373,7 @@ function describe(a){const s=k=>S(a,k);switch(a.type){
   case 'grapple':return `Hooks what you aim at within ${300+50*s('range')}. Pull ${9000+3000*s('pull')} force, shared by weight.`;
   case 'stealth':return `Fades ${Math.max(0.4,2-0.25*s('fade')).toFixed(1)}s after you stop attacking. Enemies notice you within ${Math.max(60,170-12*s('hide'))}.`;
   case 'engine':return `Thrust +${25+12*s('force')}%, higher top speed. More thrust pushes heavier things.`;
-  case 'particle':return `${24+4*s('count')} particles block bullets and latch onto nearby enemies in your aim cone, burning them with heat (${(4.5*(1+.25*s('heat'))).toFixed(1)} dps each).`;
+  case 'particle':return `${wispCount(a)} enchanted wisps circle you as a spinning ring that slices bullets and anything that touches it. When enemies come near they fly out, circle each foe firing homing starbolts (${(12*(1+.2*s('power'))).toFixed(0)} dmg), and weave a star sigil around it that burns the foe inside (${Math.round(10*(1+.25*s('weave')))} dps per wisp, up to 6) while its threads slice anything else crossing them. They go for your locked target, then whatever is near your mouse while you fire. With nothing to fight, they fetch loot.`;
 }return '';}
 
 // ================= state =================
@@ -373,14 +383,22 @@ let beacons=[], structs=[], events=[], wells=[], strikes=[], mines=[];
 // player / base / store always point at the local player's tank, base, and storage (on guests they mirror the host's copy).
 let pls=[], me=null;
 let player=null, base=null;
-let store={res:[0,0,0,0],augs:[]};
+let store={res:[0,0,0,0],augs:[],locker:[]};
 let T=0, paused=true, cam={x:HALF,y:HALF}, miniQueue=[];
 let NET=null; // null = solo, {role:'host',...} or {role:'guest',...}
 const isGuest=()=>!!(NET&&NET.role==='guest');
 // token: secret a guest keeps so it can rejoin as the same character. lock: drone target. recall: teleport-home timer.
 // store.ess: biome essence per zone (index = zone). found: safe zones this player has visited (warp destinations).
-function mkPl(id,name,color){return {id,name,color,tank:null,base:null,store:{res:[0,0,0,0],augs:[],ess:Array(9).fill(0)},party:null,invites:[],grudge:{},baseAggro:{},
-  conn:null,out:[],lastInv:'',msgN:0,msgT:0,token:null,offline:false,offT:0,lock:null,hover:null,recall:-1,contracts:[],done:0,score:0,found:new Set([0,1,2,3,4])};}
+function mkPl(id,name,color){return {id,name,color,tank:null,base:null,store:{res:[0,0,0,0],augs:[],ess:Array(9).fill(0),locker:[]},party:null,invites:[],grudge:{},baseAggro:{},
+  conn:null,out:[],lastInv:'',msgN:0,msgT:0,token:null,offline:false,offT:0,lock:null,hover:null,recall:-1,contracts:[],done:0,score:0,found:new Set([0,1,2,3,4]),
+  bp:{gun:1},bpp:{},rsPity:0};} // bp: unlocked blueprints, bpp: research progress (0-1) per augment, rsPity: bonus research chance
+// ---- blueprints: the workshop can only build augments whose blueprint you've unlocked ----
+const BP_TYPES=()=>Object.keys(AUG).filter(k=>!AUG[k].unique&&AUG[k].craft);
+// feeding the Research Lab: [tier, amount, chance to unlock a blueprint]; each miss adds 4% to the next try
+const RESEARCH=[[0,40,0.12],[1,25,0.25],[2,12,0.45],[3,6,0.8]];
+function hasLab(q){return structs.some(s=>s.pl===q&&s.stype==='lab'&&!s.dead);}
+function unlockBp(q,k){if(q.bp[k])return;q.bp[k]=1;delete q.bpp[k];toastTo(q,`Blueprint unlocked: ${AUG[k].n}. Build it in the Workshop.`);}
+function addBp(q,k,v){if(!AUG[k]||AUG[k].unique||!AUG[k].craft||q.bp[k])return;q.bpp[k]=Math.min(1,(q.bpp[k]||0)+v);if(q.bpp[k]>=0.999)unlockBp(q,k);}
 function sameSide(a,b){return !!a&&!!b&&(a===b||(!!a.party&&a.party===b.party));}
 function plById(id){return pls.find(p=>p.id===id)||null;}
 function syncLocal(){if(isGuest()||!me)return;player=me.tank;base=me.base;store=me.store;}
@@ -425,7 +443,7 @@ function mkMini(x,y,forceTier){const z=zoneAt({x,y}),Z=ZONES[z];const tier=force
 // bases are heavy but not bolted down: ram them, grapple them, or tow them with engines
 function mkBase(x,y,pl){const b=mkTank({kind:'base',isBase:true,x,y,r:44,mass:150,force:0,drag0:4,drag:4,hp:1600,maxHp:1600,slots:2,team:'p',fill:pl.color,pl,
   augs:[newAug('gun')],stats:{hp:0,def:0,range:0},born:T});applyStats(b);b.hp=b.maxHp;return b;}
-function mkPlayerTank(pl,x,y){const t=mkTank({isPlayer:true,x,y,cargo:[],carry:[0,0,0,0],ess:Array(9).fill(0),aim:-Math.PI/2,respawnT:0,augs:[newAug('gun')],dashT:0,dashCd:0,
+function mkPlayerTank(pl,x,y){const t=mkTank({isPlayer:true,x,y,slots:1,cargo:[],carry:[0,0,0,0],ess:Array(9).fill(0),aim:-Math.PI/2,respawnT:0,augs:[newAug('gun')],dashT:0,dashCd:0,
   stats:{hp:0,def:0,bat:0,cool:0},pl,fill:pl.color,name:pl.name});applyStats(t);t.hp=t.maxHp;return t;}
 function spawnPoint(){const a=rnd()*TAU;return {x:wr(SZ[0].x+Math.cos(a)*90),y:wr(SZ[0].y+Math.sin(a)*90)};}
 function bossPoint(b,th){return {x:wr(b.c.x+Math.cos(th)*560),y:wr(b.c.y+Math.sin(th*2)*320)};}
@@ -438,7 +456,8 @@ function mkBoss(z){const Z=ZONES[z],B=BOSSES[z],d=Z.d,hp=Math.round(1400*(1+0.6*
 // territory beacon: neutral until captured; owned beacons shoot at the owner's enemies and pay out resources
 function mkBeacon(ri){const R0=REGIONS[ri];return mk({kind:'beacon',ri,x:R0.b.x,y:R0.b.y,r:34,mass:1e6,static:true,team:'n',solid:true,hp:2400,maxHp:2400,def:4,
   fill:'#c9d2dc',pl:null,cap:0,capBy:null,shotT:0,aim:0,payT:30,guardT:0});}
-function mkStruct(type,x,y,pl,extra){const S0=STRUCT[type];return mk(Object.assign({kind:'struct',stype:type,x,y,r:S0.r,mass:1e6,static:true,team:'p',pl,
+// structures have weight like bases: push them, ram them, or grapple them around
+function mkStruct(type,x,y,pl,extra){const S0=STRUCT[type];return mk(Object.assign({kind:'struct',stype:type,x,y,r:S0.r,mass:S0.mass,drag:5,team:'p',pl,
   fill:pl.color,hp:S0.hp,maxHp:S0.hp,def:3,aim:0,cd:1,workT:type==='extractor'?10:20},extra));}
 // supply convoy (world event): an armored enemy hauler that carries an Orbital Lance
 function mkConvoy(from,to){return mk({kind:'convoy',team:'e',x:from.x,y:from.y,r:48,mass:500,drag:1.5,hp:5200,maxHp:5200,def:6,fill:'#c46b3d',
@@ -594,13 +613,14 @@ function killPlayer(p,k){if(p.dead)return;p.dead=true;p.respawnT=3.5;p.aboard=fa
   for(let t=0;t<4;t++){const c=p.carry[t];if(c>0){const n=Math.min(6,c);const b=Math.floor(c/n);
     for(let i=0;i<n;i++)dropRes(p,t,1,b+(i===0?c-b*n:0));}}
   for(const a of p.cargo)dropAug(p,a);p.cargo=[];p.carry=[0,0,0,0];
-  p.drones.forEach(d=>d.dead=true);p.drones=[];p.parts.length=0;for(const a of p.augs){a._h=null;a._on=false;}
+  p.drones.forEach(d=>d.dead=true);p.drones=[];for(const w of p.parts)if(w.res)w.res.claimed=null;p.parts.length=0;for(const a of p.augs){a._h=null;a._on=false;}
   boom(p,null,true);toastTo(p.pl,'Destroyed. What you carried was dropped where you fell.');
   if(k&&k.isPlayer&&k.pl!==p.pl)sysChat(`${k.pl.name} destroyed ${p.pl.name}`);}
 function killBase(b,k){const pl=b.pl;b.dead=true;boom(b,null,true);
   for(const a of b.augs)dropAug(b,a);for(const a of pl.store.augs)dropAug(b,a);
   for(let t=0;t<4;t++){const c=Math.floor(pl.store.res[t]/2);if(c>0){const n=Math.min(5,c);dropRes(b,t,n,Math.max(1,Math.floor(c/n)));}}
-  b.drones.forEach(d=>d.dead=true);pl.store={res:[0,0,0,0],augs:[],ess:Array(9).fill(0)};pl.base=null;toastTo(pl,'Your base was destroyed');
+  // the locker is safe: its augments survive the base being destroyed
+  b.drones.forEach(d=>d.dead=true);pl.store={res:[0,0,0,0],augs:[],ess:Array(9).fill(0),locker:pl.store.locker||[]};pl.base=null;toastTo(pl,'Your base was destroyed');
   // structures are tied to the base and go down with it
   for(const s of structs)if(s.pl===pl){s.dead=true;boom(s);}structs=structs.filter(s=>s.pl!==pl);
   if(k&&k.isPlayer&&k.pl!==pl)sysChat(`${k.pl.name} destroyed ${pl.name}'s base`);
@@ -620,9 +640,12 @@ function foe(team,pl,e){if(e.dead||e.down||!e.solid)return false;
 function grudge(a,e){const r=root(a),pl=r.pl;if(!pl||!e.pl)return false;const m=r.isBase?pl.baseAggro:pl.grudge;return T-(m[e.pl.id]??-1e9)<GRUDGE;}
 function hostile(a,e){if(e===a||e.owner===a||(a.owner&&(e===a.owner||e.owner===a.owner)))return false;
   if(a.team==='p'&&e.team==='p')return foe('p',a.pl,e)&&grudge(a,e);return hostileTeam(a.team,e);}
-function raycast(t,ang,range,incNeutral){const c=Math.cos(ang),s=Math.sin(ang);let best=null,bd=range;
+// a player's grapple can also hook friendly things: your base, structures, clones, and party members
+function hookable(t,e){if(hostile(t,e))return true;if(!t.isPlayer||e.dead||e.down||!e.solid||e.kin||e.kind==='bus'||e.owner===t||(e.isPlayer&&e.aboard))return false;
+  return e.team==='p'&&!!e.pl&&!!t.pl&&sameSide(t.pl,e.pl);}
+function raycast(t,ang,range,incNeutral,test){const c=Math.cos(ang),s=Math.sin(ang);let best=null,bd=range;
   for(const e of act){if(e===t)continue;
-    if(!hostile(t,e))continue;const dx=wd(t.x,e.x),dy=wd(t.y,e.y);const along=dx*c+dy*s;if(along<0||along>range+e.r)continue;
+    if(!(test?test(t,e):hostile(t,e)))continue;const dx=wd(t.x,e.x),dy=wd(t.y,e.y);const along=dx*c+dy*s;if(along<0||along>range+e.r)continue;
     const perp=Math.abs(-dx*s+dy*c);if(perp>=e.r)continue;const d=along-Math.sqrt(e.r*e.r-perp*perp);if(d<bd){bd=d;best=e;}}
   return best?{e:best,d:Math.max(0,bd)}:null;}
 function nearestHostile(t,from,range,exclude,noNeutral){let best=null,bd=range;
@@ -757,7 +780,7 @@ function updTank(t,dt){
       if(pts.length){t.bat-=8;a._cd=1.1*Math.pow(0.9,S(a,'rate'));
         for(const [p,q] of pts){hurt(q,14+5*S(a,'dmg'),t,angTo(q,p),a.mod);fx.push({k:'bolt',a:{x:p.x,y:p.y},b:q,life:.16,t:0,col:t.team==='p'?'#9fe8ff':'#ffb3c0'});}}}}
   for(const a of augsOf(t,'grapple')){const range=300+50*S(a,'range'),pull=9000+3000*S(a,'pull');
-    if(held(t,a)){if(!a._h||a._h.dead||a._h.down||!a._h.solid||dist(t,a._h)>range*1.6){a._h=null;const hit=raycast(t,t.aim,range,true);if(hit)a._h=hit.e;}}
+    if(held(t,a)){if(!a._h||a._h.dead||a._h.down||!a._h.solid||dist(t,a._h)>range*1.6){a._h=null;const hit=raycast(t,t.aim,range,true,hookable);if(hit)a._h=hit.e;}}
     else a._h=null;
     if(a._h){const h=a._h;const dx=wd(t.x,h.x),dy=wd(t.y,h.y),d=Math.hypot(dx,dy)||1;
       if(d>t.r+h.r+6){const nx=dx/d,ny=dy/d;const it=invMass(t),ih=invMass(h);
@@ -930,35 +953,73 @@ function droneAttack(d,o,bay,tgt,dt){const s=k=>S(bay,k),dd=dist(d,tgt),md=bay.m
       if(d.cd<=0){d.cd=0.1;fx.push({k:'ray',a:{x:d.x,y:d.y},b:{x:tgt.x,y:tgt.y},col:'#c9ced4',life:.12,t:0});}}break;
     case 'singularity':if(d.cd<=0&&dd<420){d.cd=18;wells.push({x:tgt.x,y:tgt.y,vx:0,vy:0,fly:0,life:0.5*(3+0.5*s('dur')),pull:0.25*(1+0.3*s('pull')),dps:0.25*(25+10*s('dmg')),owner:d,team:d.team,pl:d.pl,t:0,rw:150});}break;
     case 'orbital':if(d.cd<=0&&dd<500){d.cd=1.5*Math.max(5,12-s('cool'));strikes.push({x:tgt.x,y:tgt.y,t:1,r:0.6*(100+15*s('radius')),dmg:0.25*(160+45*s('dmg')),owner:d,team:d.team,pl:d.pl});}break;
-    case 'particle':if(dd<220){const dps=0.125*(24+4*s('count'))*4.5*(1+.25*s('heat'));hurt(tgt,dps*dt,d,undefined,md);tgt.heat=(tgt.heat||0)+0.25*7*(1+.25*s('heat'))*dt;
-      if(rnd()<dt*25)fx.push({k:'spark',x:wr(tgt.x+(rnd()-.5)*tgt.r*2),y:wr(tgt.y+(rnd()-.5)*tgt.r*2),life:.3,t:0,col:'#ff8a3d'});}break;
+    // a wisp-charged drone fires homing starbolts
+    case 'particle':if(d.cd<=0&&dd<380){d.cd=0.9;const b=fireBullet(d,angTo(d,tgt),0.25*wispCount(bay)*12*(1+.2*s('power'))/2,480,0,3.5,1.3,1);b.star=1;b.col=WISP_COL;if(md)b.mod=md;}break;
     // a clone bay keeps one quarter-strength clone of you out while the drones are fighting, re-summoning it when it fades
     case 'clone':{if(dd<500&&!o.isClone&&!ents.some(e=>e.isClone&&!e.dead&&e.srcAug===bay)){const c=mkClone(o,bay,0);c.dmgMul*=0.25;c.maxHp*=0.25;c.hp=c.maxHp;c.life=8;ents.push(c);
       fx.push({k:'boom',x:c.x,y:c.y,r:c.r,col:'#8b8fa3',life:.5,t:0});}break;}}}
+// ---- Arcane Wisps (the 'particle' augment) ----
+// Glowing wisps that act like enchanted drones. At rest they circle you as a spinning ring whose threads cut bullets
+// and anything that touches it. When enemies are near they fly out in formation, circle each target, fire homing
+// starbolts, and weave a star sigil (triangle, pentagram, hexagram...) whose threads slice through whatever is inside.
+// With nothing to fight, a few of them fetch loot like drones. They aim for your locked target, then whatever is near
+// your mouse while you fire, then the closest enemies.
+// p.st: 0 orbiting you, 1 fetching loot, 2 hunting (p.g = the target's id, so sigils can be rebuilt from a snapshot)
+const WISP_COL='#e6ccff',WISP_TINT=['#c9a6ff','#8ff6ff','#ffc2f0','#a8ffd8'];
+function wispCount(a){return Math.min(12,4+S(a,'count'));}
+// threads between wisps: a ring around the owner, and a star sigil around each target. Same rule on host and guests.
+function wispLinks(parts){const segs=[],ring=[],grp=new Map();
+  for(const p of parts){if(p.st===0)ring.push(p);else if(p.st===2){if(!grp.has(p.g))grp.set(p.g,[]);grp.get(p.g).push(p);}}
+  if(ring.length>=3)for(let j=0;j<ring.length;j++)segs.push([ring[j],ring[(j+1)%ring.length],0]);
+  for(const g of grp.values()){const m=g.length;if(m<2)continue;if(m===2){segs.push([g[0],g[1],2]);continue;}
+    const step=Math.floor((m-1)/2);for(let j=0;j<m;j++)segs.push([g[j],g[(j+step)%m],2]);
+    if(m===4){segs.push([g[0],g[2],2]);segs.push([g[1],g[3],2]);}}
+  return segs;}
+// distance from point e to the segment a-b (wrap-aware, relative to a)
+function segDist(e,a,b){const bx=wd(a.x,b.x),by=wd(a.y,b.y),ex=wd(a.x,e.x),ey=wd(a.y,e.y),L=bx*bx+by*by||1;
+  const k=Math.max(0,Math.min(1,(ex*bx+ey*by)/L));return Math.hypot(ex-bx*k,ey-by*k);}
 function updParticles(t,dt){
   const pr=augsOf(t,'particle')[0];if(!pr){t.parts.length=0;return;}
-  const count=24+4*S(pr,'count'),dps=4.5*(1+.25*S(pr,'heat')),hr=7*(1+.25*S(pr,'heat')),ispd=950*(1+.15*S(pr,'speed'));
-  while(t.parts.length<count)t.parts.push({x:t.x,y:t.y,st:0,tg:null,cd:rnd()*.5,ph:rnd()*TAU,oa:0});
-  if(t.parts.length>count)t.parts.length=count;
-  // targets: enemies in the aim cone automatically, resources too while firing
-  let tg=t.aboard?[]:coneTargets(t,220,false);if(!tg.length&&t.input.fire&&t.team==='p'&&!t.aboard)tg=coneTargets(t,240,true);
-  const spread=Math.min(3,tg.length);let ai=0;
-  for(const p of t.parts){p.cd-=dt;
-    if(p.st===1){const b=p.tg;if(!b||b.gone){p.st=0;p.tg=null;}
-      else{const dx=wd(p.x,b.x),dy=wd(p.y,b.y),d=Math.hypot(dx,dy)||1;const s=Math.min(d,ispd*dt);p.x=wr(p.x+dx/d*s);p.y=wr(p.y+dy/d*s);
-        if(d<10){b.gone=true;p.st=0;p.tg=null;p.cd=0.4;fx.push({k:'spark',x:p.x,y:p.y,life:.25,t:0,col:'#ffb86b'});}}}
-    else if(p.st===2){const e=p.tg;
-      if(!e||e.dead||e.down||dist(t,e)>320||!inCone(t,e)||t.aboard){p.st=0;p.tg=null;p.cd=0.2;}
-      else{const tx=wr(e.x+Math.cos(p.oa+T*.5)*e.r*.95),ty=wr(e.y+Math.sin(p.oa+T*.5)*e.r*.95);
-        p.x=wr(p.x+wd(p.x,tx)*Math.min(1,dt*14));p.y=wr(p.y+wd(p.y,ty)*Math.min(1,dt*14));
-        e.heat+=hr*dt;hurt(e,dps*dt,t,p.oa);}}
-    if(p.st===0){const a=p.ph+T*2.2,rr=t.r+14+6*Math.sin(T*3+p.ph);const tx=wr(t.x+Math.cos(a)*rr),ty=wr(t.y+Math.sin(a)*rr);
-      p.x=wr(p.x+wd(p.x,tx)*Math.min(1,dt*9));p.y=wr(p.y+wd(p.y,ty)*Math.min(1,dt*9));
-      if(p.cd<=0){let nb=null,bd=140;
-        for(const b of bullets){if(b.gone||b.claimed||(b.team===t.team&&!(b.pl&&t.pl&&!sameSide(b.pl,t.pl))))continue;const d=dist(t,b);if(d<bd){bd=d;nb=b;}}
-        if(nb){p.st=1;p.tg=nb;nb.claimed=true;}
-        else if(spread){p.st=2;p.tg=tg[(ai++)%spread].e;p.oa=rnd()*TAU;}
-        else p.cd=0.25;}}}
+  const n=wispCount(pr),pw=1+0.2*S(pr,'power'),wv=1+0.25*S(pr,'weave'),md=pr.mod;
+  while(t.parts.length<n)t.parts.push({x:t.x,y:t.y,st:0,g:0,cd:rnd(),tg:null,res:null});
+  if(t.parts.length>n)t.parts.length=n;
+  const pl=t.isPlayer?t.pl:null,range=t.isBase?540:500;
+  // pick targets
+  let tg=[];
+  if(!t.aboard&&!(t.isPlayer&&inSafe(t))){
+    const cand=[];for(const e of act){if(e.kind==='bus'||e.team==='n'||!hostile(t,e))continue;const d=dist(t,e);if(d<range)cand.push([d,e]);}
+    cand.sort((a,b)=>a[0]-b[0]);let pri=null;
+    if(pl&&pl.lock&&pl.lock.e&&lockable(t,pl.lock.e)&&pl.lock.e.team!=='n'&&dist(t,pl.lock.e)<range+200)pri=pl.lock.e;
+    const i=t.input;if(!pri&&i&&i.hasMouse&&i.fire){let bd=220;for(const [,e] of cand){const d=dist({x:i.wx,y:i.wy},e)-e.r;if(d<bd){bd=d;pri=e;}}}
+    tg=pri?[pri]:cand.slice(0,Math.max(1,Math.min(3,Math.floor(n/3)))).map(c=>c[1]);}
+  // hand out wisps: all of them hunt when there is something to fight
+  const groups=tg.map(()=>[]);
+  t.parts.forEach((p,i)=>{if(tg.length){if(p.res){p.res.claimed=null;p.res=null;}const gi=i%tg.length;groups[gi].push(p);p.st=2;p.tg=tg[gi];p.g=tg[gi].id;}
+    else{p.tg=null;p.g=0;if(p.st===2)p.st=0;if(p.st===1&&(!p.res||p.res.gone)){p.st=0;p.res=null;}}});
+  if(!tg.length&&t.team==='p'){let busy=t.parts.filter(p=>p.st===1).length;
+    for(const p of t.parts){if(busy>=Math.ceil(n/3))break;if(p.st!==0)continue;const r=nearestRes(t,380);if(!r)break;r.claimed=p;p.res=r;p.st=1;busy++;}}
+  // fly
+  const ringN=t.parts.filter(p=>p.st===0).length;let oi=0;
+  for(const p of t.parts){let tx,ty,k=8;
+    if(p.st===2){const g=groups[tg.indexOf(p.tg)],m=g.length,j=g.indexOf(p),e=p.tg,rr=e.r+50,a=T*1.2+j*TAU/m+e.id;
+      tx=wr(e.x+Math.cos(a)*rr);ty=wr(e.y+Math.sin(a)*rr);k=5;p.cd-=dt;
+      if(p.cd<=0&&dist(p,e)<rr+70){p.cd=0.7*Math.pow(0.95,S(pr,'power'))*(0.85+0.3*rnd());
+        const b=fireBullet(t,angTo(p,e),12*pw,480,0,4,1.3,1);b.x=p.x;b.y=p.y;b.vx=Math.cos(angTo(p,e))*480;b.vy=Math.sin(angTo(p,e))*480;b.star=1;b.col=WISP_COL;if(md)b.mod=md;}}
+    else if(p.st===1){const r=p.res;tx=r.x;ty=r.y;k=9;
+      if(dist(p,r)<16){r.gone=true;p.st=0;p.res=null;fx.push({k:'spark',x:p.x,y:p.y,life:.3,t:0,col:WISP_COL});
+        if(r.k==='ess'){if(t.isBase)t.pl.store.ess[r.z]+=r.amt;else if(t.ess)t.ess[r.z]+=r.amt;}
+        else{if(t.isBase)t.pl.store.res[r.tier]+=r.amt;else if(t.carry)t.carry[r.tier]+=r.amt;if(pl)progress(pl,'mine',r);}}}
+    else{const a=T*1.1+(oi++)*TAU/Math.max(1,ringN),rr=t.r+(t.isBase?42:30)+3*Math.sin(T*2+oi);tx=wr(t.x+Math.cos(a)*rr);ty=wr(t.y+Math.sin(a)*rr);}
+    const dx=wd(p.x,tx),dy=wd(p.y,ty),d=Math.hypot(dx,dy)||1,s=Math.min(d*Math.min(1,dt*k),950*dt);p.x=wr(p.x+dx/d*s);p.y=wr(p.y+dy/d*s);}
+  // a finished sigil (wisps in formation around their foe) burns the foe trapped inside it
+  tg.forEach((e,gi)=>{const g=groups[gi],m=g.length;if(m<2||e.dead)return;let ok=0;for(const p of g)if(dist(p,e)<e.r+90)ok++;
+    if(ok>=Math.min(m,3)){hurt(e,10*wv*Math.min(m,6)*dt,t,undefined,md);if(rnd()<dt*10)fx.push({k:'spark',x:wr(e.x+(rnd()-.5)*e.r*2),y:wr(e.y+(rnd()-.5)*e.r*2),life:.35,t:0,col:WISP_COL});}});
+  // threads: the sigils cut hard, the resting ring lightly; both shave down enemy bullets that cross them
+  for(const [a,b,kind] of wispLinks(t.parts)){const dps=(kind===2?16:7)*wv,mx=wr(a.x+wd(a.x,b.x)/2),my=wr(a.y+wd(a.y,b.y)/2),half=dist(a,b)/2+60;
+    for(const e of act){if(e.kind==='bus'||e.team==='n'||e.dead||e.down||Math.abs(wd(mx,e.x))>half||Math.abs(wd(my,e.y))>half||!hostile(t,e))continue;
+      if(segDist(e,a,b)<e.r+3){hurt(e,dps*dt,t,undefined,md);if(rnd()<dt*8)fx.push({k:'spark',x:e.x,y:e.y,life:.3,t:0,col:WISP_COL});}}
+    for(const u of bullets){if(u.gone||u.cut||Math.abs(wd(mx,u.x))>half||Math.abs(wd(my,u.y))>half)continue;if(u.team===t.team&&!(u.pl&&t.pl&&!sameSide(u.pl,t.pl)))continue;
+      if(segDist(u,a,b)<u.r+3){u.cut=true;u.hp-=(kind===2?12:9)*wv;if(u.hp<=0){u.gone=true;fx.push({k:'spark',x:u.x,y:u.y,life:.25,t:0,col:WISP_COL});}}}}
 }
 
 // ================= AI =================
@@ -1006,11 +1067,24 @@ function updMini(t,dt){
 function updBase(b,dt){let tgt=null,bd=430;
   for(const e of act){if(e.dead||e.down)continue;
     if(e.team!=='e'&&e.team!=='w'&&!(e.team==='p'&&hostile(b,e)))continue;const d=dist(b,e);if(d<bd){bd=d;tgt=e;}}
+  // nothing hostile around: mine the resource nodes and their chunks in range (never nests or other special nodes,
+  // and never a node your own extractor is working)
+  if(!tgt){let best=430;for(const e of act){if(e.dead||e.down||!e.solid)continue;
+    const ok=e.kind==='chunk'||(e.kind==='node'&&e.ntype==='resource'&&!structs.some(s=>s.node===e&&s.pl===b.pl));if(!ok)continue;
+    const d=dist(b,e)-e.r*(e.kind==='node'?1:0)+(e.kind==='chunk'?0:60);if(d<best){best=d;tgt=e;bd=dist(b,e);}}}
   b.input.mx=0;b.input.my=0;b.input.fire=!!tgt;b.input.btns=tgt?511:0;b.input.tdist=tgt?bd:0;if(tgt)b.aim=angTo(b,tgt);
   b.hp=Math.min(b.maxHp,b.hp+5*dt);}
 // shadow clones fight near their owner and fade out when their time is up
 function updClone(c,dt){const o=c.owner,inp=c.input;c.life-=dt;
   if(c.life<=0||!o||o.dead||o.gone){c.dead=true;fx.push({k:'boom',x:c.x,y:c.y,r:c.r,col:'#8b8fa3',life:.5,t:0});return;}
+  inp.hasMouse=false;
+  // a player's clones copy them: while the player is attacking by hand, the clones press the same buttons
+  // and aim where the player is aiming (the mouse point, or a point ahead of the player's aim)
+  const oi=o.input,mirror=o.isPlayer&&((oi.btns&~BTN.shift)!==0||oi.fire);
+  if(mirror){const p=aimPoint(o,1400,500);c.aim=angTo(c,p);inp.hasMouse=true;inp.wx=p.x;inp.wy=p.y;inp.tdist=dist(c,p);
+    inp.btns=oi.btns&~BTN.shift;inp.fire=!!oi.fire;
+    const a=T*0.8+c.id,tx=wr(o.x+Math.cos(a)*90),ty=wr(o.y+Math.sin(a)*90),dx=wd(c.x,tx),dy=wd(c.y,ty),d=Math.hypot(dx,dy)||1;
+    const f=d>40?1:0.2;inp.mx=dx/d*f;inp.my=dy/d*f;c.alpha=0.55+0.1*Math.sin(T*6+c.id);return;}
   let tgt=null,bd=560;for(const e of act){if(e.team==='n'||e.kind==='bus'||!hostile(c,e))continue;const d=dist(o,e);if(d<bd){bd=d;tgt=e;}}
   if(tgt){const dx=wd(c.x,tgt.x),dy=wd(c.y,tgt.y),d=Math.hypot(dx,dy)||1;c.aim=Math.atan2(dy,dx);const want=c.rammer?0:200;
     const radial=d>want+30?1:d<want-30?-1:0,tang=Math.sin(T*0.9+c.id)*0.8;inp.mx=dx/d*radial-dy/d*tang;inp.my=dy/d*radial+dx/d*tang;
@@ -1079,7 +1153,9 @@ function bossBeam(b,ang,len,dps,dt){const c=Math.cos(ang),s=Math.sin(ang);
 function bossLoot(e){const Z=ZONES[e.z],d=Z.d,tier=Math.min(3,Math.floor((d-1)/2.5));
   dropRes(e,tier,6+d,3+Math.ceil(d/2));if(tier<3)dropRes(e,tier+1,3+Math.floor(d/2),2+Math.ceil(d/3));dropEss(e,e.z,8+d);
   dropAug(e,newAug(POOL[Math.floor(rnd()*POOL.length)],Math.min(20,4+2*d)));
-  if(d>=7||(d>=4&&rnd()<.35))dropAug(e,newAug('singularity'));}
+  if(d>=7||(d>=4&&rnd()<.35))dropAug(e,newAug('singularity'));
+  // Shadow Clone: always from the Void's Hollow, sometimes from other bosses from zone 3 up
+  if(e.bt==='hollow'||(d>=3&&rnd()<.2))dropAug(e,newAug('clone'));}
 function updBus(b,dt){
   b.dx=0;b.dy=0;b.drot=0;
   const n=b.stops.length;
@@ -1119,7 +1195,7 @@ function envTick(dt){
   for(const e of act){if(e.dead||e.down)continue;
     if(e.cold>0)e.cold=Math.max(0,e.cold-18*dt);
     if(e.poison>0){const d=Math.min(e.poison,(e.poison*0.35+2)*dt);e.poison-=d;hurt(e,d,null);if(rnd()<dt*4)fx.push({k:'spark',x:e.x,y:e.y,life:.35,t:0,col:'#9fe870'});}
-    if(e.static||e.kin||e.kind==='node'||e.kind==='chunk'||e.aboard)continue;
+    if(e.static||e.kin||e.kind==='node'||e.kind==='chunk'||e.kind==='struct'||e.aboard)continue;
     const z=zoneAt(e),Z=ZONES[z];if(e.native===z||inSafe(e))continue;const tanky=e.kind==='tank';
     switch(Z.k){
       case 'desert':if(tanky)e.heat=(e.heat||0)+10*dt;break;
@@ -1142,7 +1218,7 @@ function defendTarget(s,range,useBase){let tgt=null,bd=range;
     if(!ok)continue;const d=dist(s,e);if(d<bd){bd=d;tgt=e;}}return tgt;}
 function updStruct(s,dt){s.hp=Math.min(s.maxHp,s.hp+2*dt);const q=s.pl;
   if(s.stype==='turret'){s.cd-=dt;const tg=s.active?defendTarget(s,440,true):null;if(tg){s.aim=angTo(s,tg);if(s.cd<=0){s.cd=0.55;fireBullet(s,s.aim,14,560,0,5);}}}
-  else if(s.stype==='extractor'){const n=s.node;if(!n||n.down||n.dead)return;s.workT-=dt;if(s.workT<=0){s.workT=10;q.store.res[n.tier]+=4+2*n.tier;
+  else if(s.stype==='extractor'){const n=s.node;if(!n||n.down||n.dead||dist(s,n)>n.r+s.r+60)return;s.workT-=dt;if(s.workT<=0){s.workT=10;q.store.res[n.tier]+=4+2*n.tier;
     fx.push({k:'spark',x:n.x,y:n.y,life:.5,t:0,col:TIER[n.tier].c});}}
   else if(s.stype==='refinery'){s.workT-=dt;if(s.workT<=0){s.workT=20;for(let i=0;i<3;i++)if(q.store.res[i]>=30){q.store.res[i]-=30;q.store.res[i+1]+=6;break;}}}
   else if(s.stype==='pylon'&&s.active){for(const e of act){if(e.dead||e.team!=='p'||!e.pl||!sameSide(e.pl,q)||dist(e,s)>320)continue;
@@ -1158,7 +1234,7 @@ function buildStruct(q,type){const t=q.tank,d=STRUCT[type];if(!d||t.dead||!q.bas
     const a=angTo(node,t);x=wr(node.x+Math.cos(a)*(node.r+22));y=wr(node.y+Math.sin(a)*(node.r+22));extra={node};}
   if(inSafe({x,y},40)){toastTo(q,'Structures can’t be built in a safe zone');return;}
   d.cost.forEach(([i,v])=>q.store.res[i]-=v);const s=mkStruct(type,x,y,q,extra);structs.push(s);ents.push(s);
-  if(type==='turret'||type==='pylon'||type==='refinery'){const a=angTo(q.base,t);s.x=wr(t.x+Math.cos(a)*30);s.y=wr(t.y+Math.sin(a)*30);}
+  if(type==='turret'||type==='pylon'||type==='refinery'||type==='lab'){const a=angTo(q.base,t);s.x=wr(t.x+Math.cos(a)*30);s.y=wr(t.y+Math.sin(a)*30);}
   toastTo(q,`${d.n} built`);fx.push({k:'boom',x:s.x,y:s.y,r:s.r,col:q.color,life:.5,t:0});}
 function updBeacon(b,dt){b.rot=(b.rot||0)+dt*.3;
   const near=pls.filter(q=>!q.offline&&!q.tank.dead&&!q.tank.aboard&&dist(q.tank,b)<260);
@@ -1343,6 +1419,8 @@ function collide(dt){const n=act.length;
       if(a.owner===b||b.owner===a||(a.owner&&a.owner===b.owner))continue;
       if((a.kind==='bus'&&(b.isPlayer||b.kind==='base'))||(b.kind==='bus'&&(a.isPlayer||a.kind==='base')))continue;
       if((a.isPlayer&&a.aboard)||(b.isPlayer&&b.aboard))continue;
+      // drones fly over nodes instead of crashing into them
+      if((a.kind==='drone'&&b.kind==='node')||(b.kind==='drone'&&a.kind==='node'))continue;
       const rr=a.r+b.r;const dx=wd(a.x,b.x);if(dx>rr||dx<-rr)continue;const dy=wd(a.y,b.y);if(dy>rr||dy<-rr)continue;
       const d2=dx*dx+dy*dy;if(d2>=rr*rr)continue;
       const d=Math.sqrt(d2)||0.01,nx=dx/d,ny=dy/d,ov=rr-d;const ia=invMass(a),ib=invMass(b),sum=ia+ib;if(sum===0)continue;
@@ -1376,7 +1454,7 @@ function updBullets(dt){
         for(const e of act){if(e.kind==='bus'||e.team==='n'||e===b.owner||!foe(b.team,b.pl,e))continue;const d=dist(b,e);if(d<bd){bd=d;tg=e;}}b.tg=tg;}
       if(tg){const want=angTo(b,tg),cur=Math.atan2(b.vy,b.vx),da=Math.atan2(Math.sin(want-cur),Math.cos(want-cur));
         const na=cur+Math.max(-5*dt,Math.min(5*dt,da));b.vx=Math.cos(na)*b.spd;b.vy=Math.sin(na)*b.spd;}
-      if(rnd()<dt*25)fx.push({k:'puff',x:b.x,y:b.y,vx:0,vy:0,life:.3,t:0,col:'#c9ced4'});}
+      if(rnd()<dt*(b.star?14:25))fx.push({k:'puff',x:b.x,y:b.y,vx:0,vy:0,life:b.star?.45:.3,t:0,col:b.star?'#c9a6ff':'#c9ced4'});}
     b.x=wr(b.x+b.vx*dt);b.y=wr(b.y+b.vy*dt);b.life-=dt;if(b.life<=0){b.gone=true;continue;}
     for(const e of act){if(!foe(b.team,b.pl,e))continue;if(e===b.owner||e.owner===b.owner||(b.owner&&b.owner.owner===e))continue;
       if(b.hits&&b.hits.has(e.id))continue;const rr=e.r+b.r;const dx=wd(b.x,e.x);if(dx>rr||dx<-rr)continue;const dy=wd(b.y,e.y);if(dy>rr||dy<-rr)continue;
@@ -1578,7 +1656,14 @@ function drawTank(t,x,y){
   ctx.globalAlpha=1;
   // teleport-home progress
   const rc=t.pl?t.pl.recall:t.rc;if(t.isPlayer&&rc>=0){ctx.strokeStyle='#8fd3ff';ctx.lineWidth=4;ctx.beginPath();ctx.arc(x,y,r+12,-Math.PI/2,-Math.PI/2+TAU*Math.min(1,rc/3));ctx.stroke();}
-  if(t!==player&&t.alpha>0.5)hpBar(x,y+r+10,r*2,t);
+  // player tanks get a circular hp ring (always on for your own tank); everything else keeps the flat bar
+  if(t.isPlayer&&(t===player||t.alpha>0.5)){const f=Math.max(0,Math.min(1,t.hp/t.maxHp)),rr=r+7;
+    ctx.lineWidth=t===player?4:3;ctx.strokeStyle='#0008';pathCircle(x,y,rr);ctx.stroke();
+    let c=f>0.5?'#57d17e':f>0.25?'#ffd27a':'#ff5a5f';if(!friendly(t))c='#ff7a7f';
+    if(f<=0.25&&t===player)ctx.globalAlpha=0.6+0.4*Math.sin(T*10);
+    if(f>0){ctx.strokeStyle=c;ctx.lineCap='round';ctx.beginPath();ctx.arc(x,y,rr,-Math.PI/2,-Math.PI/2+TAU*f);ctx.stroke();ctx.lineCap='butt';}
+    ctx.globalAlpha=1;}
+  else if(t!==player&&t.alpha>0.5)hpBar(x,y+r+10,r*2,t);
   const tag=t.isPlayer?t.name:t.isBase?baseName(t):t.name||'';
   if(tag&&(t===player||t.alpha>0.5)){ctx.font='500 12px Rubik,system-ui';ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle=PAL.bg;
     const lbl=t.isPlayer&&t!==player&&friendly(t)?'◆ '+tag:tag;ctx.strokeText(lbl,x,y-r-(t.isBase?10:16));ctx.fillStyle=friendly(t)?PAL.ink:'#ff7a7f';ctx.fillText(lbl,x,y-r-(t.isBase?10:16));}
@@ -1624,6 +1709,10 @@ function drawStruct(s,x,y){const r=s.r;
   if(s.stype==='turret'){pathPoly(x,y,r,4,Math.PI/4);paint(s);barrel(x,y,s.aim||0,r+10,7,'#9aa3ad');}
   else if(s.stype==='extractor'){pathPoly(x,y,r,3,(s.rot||0)+T*1.5);paint(s);}
   else if(s.stype==='refinery'){pathPoly(x,y,r,6,0);paint(s);ctx.lineWidth=2;ctx.strokeStyle=strokeFor(s.fill,0);pathPoly(x,y,r*.5,6,T);ctx.stroke();}
+  // research lab: a dome with an orbiting atom
+  else if(s.stype==='lab'){pathCircle(x,y,r);paint(s);ctx.lineWidth=2;ctx.strokeStyle='#d9a6ff';
+    for(let k=0;k<3;k++){ctx.save();ctx.translate(x,y);ctx.rotate(k*Math.PI/3+T*.6);ctx.beginPath();ctx.ellipse(0,0,r*.72,r*.28,0,0,TAU);ctx.stroke();ctx.restore();}
+    pathCircle(x,y,3.5);ctx.fillStyle='#d9a6ff';ctx.fill();}
   else{pathCircle(x,y,r);paint(s);ctx.strokeStyle='#6fe39a';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x-8,y);ctx.lineTo(x+8,y);ctx.moveTo(x,y-8);ctx.lineTo(x,y+8);ctx.stroke();
     if(friendly(s)){ctx.globalAlpha=.18;ctx.strokeStyle='#6fe39a';pathCircle(x,y,320);ctx.stroke();ctx.globalAlpha=1;}}
   hpBar(x,y+r+8,40,s);}
@@ -1714,7 +1803,12 @@ function render(){
     else if(e.kind==='boss')drawBoss(e,x,y);
     else drawTank(e,x,y);}
   for(const [e,x,y] of layers[3])drawTank(e,x,y);
-  for(const b of bullets){const [x,y]=sxy(b);if(!vis(x,y,10))continue;pathCircle(x,y,bulletR(b));const bc=b.col||'#ff7b80';ctx.fillStyle=bc;ctx.fill();
+  drawCompass();
+  for(const b of bullets){const [x,y]=sxy(b);if(!vis(x,y,10))continue;
+    // starbolts from Arcane Wisps: a glowing four-point star
+    if(b.star||b.col===WISP_COL){ctx.globalAlpha=.35;ctx.fillStyle='#c9a6ff';pathCircle(x,y,9);ctx.fill();ctx.globalAlpha=1;ctx.fillStyle='#ffffff';ctx.beginPath();
+      for(let k=0;k<8;k++){const a=T*5+k*Math.PI/4,rr=k%2?2:6.5;ctx.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr);}ctx.closePath();ctx.fill();continue;}
+    pathCircle(x,y,bulletR(b));const bc=b.col||'#ff7b80';ctx.fillStyle=bc;ctx.fill();
     ctx.lineWidth=1.5;ctx.strokeStyle=strokeFor(bc,0);ctx.stroke();}
   for(const e of act){if(!e.augs||e.dead)continue;const [x,y]=sxy(e);
     for(const a of e.augs){
@@ -1724,7 +1818,7 @@ function render(){
         ctx.globalAlpha=1;ctx.lineWidth=bm.d?1:2;ctx.strokeStyle='#ffffff';ctx.stroke();}}
       if(a.type==='grapple'&&a._h&&!a._h.dead){const [hx,hy]=sxy(a._h);ctx.strokeStyle='#c9ced4';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(hx,hy);ctx.stroke();
         pathCircle(hx,hy,4);ctx.fillStyle='#c9ced4';ctx.fill();}}
-    if(e.parts&&e.parts.length){for(const p of e.parts){const [px,py]=sxy(p);pathCircle(px,py,p.st===2?3:2.4);ctx.fillStyle=p.st===2?'#ff8a3d':'#ffd9a0';ctx.fill();}}}
+    if(e.parts&&e.parts.length)drawWisps(e);}
   for(const f of fx){const k=f.t/f.life;
     if(f.k==='arc'||f.k==='shatter'||f.k==='pulse'){if(f.e.dead)continue;const [x,y]=sxy(f.e);
       if(f.k==='arc'){ctx.globalAlpha=1-k;ctx.strokeStyle='#8ff0ff';ctx.lineWidth=3.5;ctx.beginPath();ctx.arc(x,y,f.e.r+10,f.ang-.6,f.ang+.6);ctx.stroke();}
@@ -1764,6 +1858,47 @@ function render(){
 // ================= minimap =================
 const mini=document.getElementById('mini'),mctx=mini.getContext('2d');const MS=200;
 // minimap data for one viewer: shuttles, bosses, and only your own party's tanks and bases (others stay hidden)
+// Arcane Wisps: shimmering threads first (sigils brighter than the resting ring), then each wisp as a soft glow
+// with a bright twinkling core. Sigils also get a faint rotating rune circle through their wisps.
+function drawWisps(e){const P=e.parts,ours=e.team==='p';
+  const segs=wispLinks(P);ctx.save();ctx.lineCap='round';
+  for(const [a,b,kind] of segs){const [x1,y1]=sxy(a),[x2,y2]=sxy(b);const pul=.55+.25*Math.sin(T*6+x1*.01);
+    ctx.globalAlpha=(kind===2?.5:.28)*pul;ctx.strokeStyle=ours?'#b58cff':'#ff8fb8';ctx.lineWidth=kind===2?6:4;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    ctx.globalAlpha=(kind===2?.9:.55)*pul;ctx.strokeStyle='#ffffff';ctx.lineWidth=kind===2?1.6:1;ctx.stroke();}
+  // rune circles around each sigil
+  const grp=new Map();for(const p of P)if(p.st===2){if(!grp.has(p.g))grp.set(p.g,[]);grp.get(p.g).push(p);}
+  for(const g of grp.values()){if(g.length<3)continue;let cx=0,cy=0;const [ox,oy]=sxy(g[0]);for(const p of g){const [x,y]=sxy(p);cx+=x;cy+=y;}cx/=g.length;cy/=g.length;
+    const r=Math.hypot(ox-cx,oy-cy);ctx.globalAlpha=.3;ctx.strokeStyle=ours?'#d9a6ff':'#ff9fc8';ctx.lineWidth=1.5;ctx.setLineDash([3,9]);ctx.lineDashOffset=-T*25;
+    pathCircle(cx,cy,r+8);ctx.stroke();ctx.setLineDash([]);ctx.lineDashOffset=0;}
+  P.forEach((p,i)=>{const [x,y]=sxy(p);if(!vis(x,y,20))return;const c=ours?WISP_TINT[i%4]:'#ff9fc8',tw=1+.25*Math.sin(T*8+i*1.7);
+    ctx.globalAlpha=.18;ctx.fillStyle=c;pathCircle(x,y,11*tw);ctx.fill();ctx.globalAlpha=.45;pathCircle(x,y,6.5*tw);ctx.fill();
+    ctx.globalAlpha=1;ctx.fillStyle='#ffffff';pathCircle(x,y,2.6);ctx.fill();
+    // a small four-point sparkle turning on each core
+    ctx.globalAlpha=.8;ctx.strokeStyle='#ffffff';ctx.lineWidth=1;const s=7*tw,a=T*2+i;ctx.beginPath();
+    ctx.moveTo(x+Math.cos(a)*s,y+Math.sin(a)*s);ctx.lineTo(x-Math.cos(a)*s,y-Math.sin(a)*s);ctx.moveTo(x-Math.sin(a)*s,y+Math.cos(a)*s);ctx.lineTo(x+Math.sin(a)*s,y-Math.cos(a)*s);ctx.stroke();});
+  ctx.restore();}
+// Compass ring around your tank: a square marker points to your base and triangles point to party members.
+// Markers only show for things more than ~260 away; the base marker also shows the distance.
+function drawCompass(){const p=player;if(!p||p.dead||!started)return;const d=MM,mid=myId(),[px,py]=sxy(p),R=p.r+46;
+  const marks=[];
+  const hb=base&&!base.dead?base:d&&d.ba?(()=>{const b=d.ba.find(b=>b[0]===mid);return b?{x:b[1],y:b[2]}:null;})():null;
+  if(hb)marks.push({x:hb.x,y:hb.y,c:p.fill,k:'base'});
+  if(!isGuest()){for(const q of pls)if(q!==me&&!q.offline&&!q.tank.dead&&sameSide(q,me))marks.push({x:q.tank.x,y:q.tank.y,c:q.color,k:'ally'});}
+  else if(d&&d.pl){const names=roster();for(const a of d.pl){if(a[0]===mid)continue;const n=names.find(q=>q.id===a[0]);if(n&&n.off)continue;
+    // a party member close enough to be in the snapshot has a fresher position than the minimap
+    const live=ents.find(e=>e.isPlayer&&e.pid===a[0]&&!e.dead);
+    marks.push({x:live?live.x:a[1],y:live?live.y:a[2],c:safeCol(a[3]),k:'ally'});}}
+  const show=marks.map(m=>{const dx=wd(p.x,m.x),dy=wd(p.y,m.y);return Object.assign(m,{a:Math.atan2(dy,dx),d:Math.hypot(dx,dy)});}).filter(m=>m.d>260);
+  if(!show.length)return;
+  ctx.save();ctx.globalAlpha=.14;ctx.strokeStyle=PAL.ink;ctx.lineWidth=1.5;pathCircle(px,py,R);ctx.stroke();
+  for(const m of show){const x=px+Math.cos(m.a)*R,y=py+Math.sin(m.a)*R;ctx.globalAlpha=.95;ctx.lineWidth=2;ctx.strokeStyle='#ffffff';ctx.fillStyle=m.c;
+    ctx.save();ctx.translate(x,y);ctx.rotate(m.a);ctx.beginPath();
+    if(m.k==='base'){ctx.rect(-6,-6,12,12);ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(9,-5);ctx.lineTo(15,0);ctx.lineTo(9,5);ctx.closePath();ctx.fill();ctx.stroke();}
+    else{ctx.moveTo(9,0);ctx.lineTo(-6,-7);ctx.lineTo(-3,0);ctx.lineTo(-6,7);ctx.closePath();ctx.fill();ctx.stroke();}
+    ctx.restore();
+    if(m.k==='base'){const tx=px+Math.cos(m.a)*(R+22),ty=py+Math.sin(m.a)*(R+22)+4;ctx.font='600 11px Rubik,system-ui';ctx.textAlign='center';
+      ctx.lineWidth=3;ctx.strokeStyle=PAL.bg;const s=`${Math.round(m.d/10)}m`;ctx.strokeText(s,tx,ty);ctx.fillStyle=PAL.ink;ctx.fillText(s,tx,ty);}}
+  ctx.restore();}
 function miniData(q){const side=p=>sameSide(p,q);const r=v=>Math.round(v);
   return {bu:buses.filter(b=>!b.down).map(b=>[r(b.x),r(b.y)]),bo:bosses.filter(b=>!b.down).map(b=>[r(b.x),r(b.y)]),
     pl:pls.filter(p=>side(p)&&!p.tank.dead).map(p=>[p.id,r(p.tank.x),r(p.tank.y),p.color]),
@@ -1879,25 +2014,27 @@ function openInventory(){menuMode='inv';sel=null;renderMenu();menuEl.hidden=fals
 function closeMenu(){menuEl.hidden=true;endDrag();}
 menuEl.addEventListener('click',e=>{if(e.target===menuEl)closeMenu();});
 // what the local player's inventory looks like: live objects on the host, the host's latest copy on a guest
-function view(){return isGuest()?G.inv:me?{tank:me.tank,base:me.base,store:me.store,cargo:me.tank.cargo,sc:structCounts(me)}:null;}
+function view(){return isGuest()?G.inv:me?{tank:me.tank,base:me.base,store:me.store,cargo:me.tank.cargo,sc:structCounts(me),bp:me.bp,bpp:me.bpp,pity:me.rsPity}:null;}
 function structCounts(q){const o={};for(const s of structs)if(s.pl===q)o[s.stype]=(o[s.stype]||0)+1;return o;}
 // locations: tank, cargo, base, store, and bay:<uid of a Drones augment>
 function droneAugs(){const v=view();return [...v.tank.augs.filter(a=>a.type==='drones'),...(menuMode==='base'&&v.base?v.base.augs.filter(a=>a.type==='drones'):[])];}
-function locArr(loc){const v=view();if(loc==='tank')return v.tank.augs;if(loc==='cargo')return v.cargo||[];if(loc==='base')return v.base?v.base.augs:[];if(loc==='store')return v.store.augs;
+function locArr(loc){const v=view();if(loc==='tank')return v.tank.augs;if(loc==='cargo')return v.cargo||[];if(loc==='base')return v.base?v.base.augs:[];if(loc==='store')return v.store.augs;if(loc==='locker')return v.store.locker||[];
   if(loc.startsWith('bay:')){const d=droneAugs().find(a=>a.uid===+loc.slice(4));return d&&d.bay?[d.bay]:[];}return [];}
-function allLocs(){const L=menuMode==='base'?['tank','base','store','cargo']:['tank','cargo'];return [...L,...droneAugs().map(a=>'bay:'+a.uid)];}
+function allLocs(){const L=menuMode==='base'?['tank','base','store','locker','cargo']:['tank','cargo'];return [...L,...droneAugs().map(a=>'bay:'+a.uid)];}
 function tn(i){return TIER[i].n.toLowerCase();}
 function card(a,loc){const d=AUG[a.type];const cat=d.unique?'unique':d.cat;
   return `<button class="card ${sel&&sel.uid===a.uid?'on':''}" data-sel="${loc}:${a.uid}" data-uid="${a.uid}" data-loc="${loc}" style="--cc:${CATCOL[cat]}"><span class="nm">${d.n}</span><span class="lv">${d.unique?'Legendary · ':''}Lv ${a.lvl}${d.size>1?' · '+d.size+' slots':''}</span>${a.mod&&MODS[a.mod]?`<span class="lv" style="color:${MODS[a.mod].c}">${MODS[a.mod].n}</span>`:''}</button>`;}
+// cards are listed alphabetically (then highest level first); only the display is sorted, actions go by uid
+function sortAugs(arr){return arr.slice().sort((a,b)=>AUG[a.type].n.localeCompare(AUG[b.type].n)||b.lvl-a.lvl||a.uid-b.uid);}
 // each section is also a drop target for dragging augments between tank, base, and storage
-function section(title,arr,loc,emptyMsg,extra){return `<h3>${title}</h3>`+(arr.length?`<div class="cards" data-drop="${loc}">${arr.map(a=>card(a,loc)).join('')}</div>`:`<div class="empty-note" data-drop="${loc}">${emptyMsg}</div>`)+(extra||'');}
+function section(title,arr,loc,emptyMsg,extra){return `<h3>${title}</h3>`+(arr.length?`<div class="cards" data-drop="${loc}">${sortAugs(arr).map(a=>card(a,loc)).join('')}</div>`:`<div class="empty-note" data-drop="${loc}">${emptyMsg}</div>`)+(extra||'');}
 function baySections(){let h='';const v=view();
   for(const d of droneAugs()){const where=v.tank.augs.includes(d)?'tank':'base';
     h+=`<div class="bay" style="margin-top:8px">`+section(`Drone bay — Drones Lv ${d.lvl} (${where})`,d.bay?[d.bay]:[],'bay:'+d.uid,'Empty. Drop any augment except Drones here. Drones use it at 25% strength; without one they only collect.')+'</div>';}
   return h;}
 function essHtml(e){if(!e||!e.some(v=>v>0))return '';return `<div class="res" style="margin-top:4px;font-size:12px">${ZONES.map((z,i)=>e[i]?`<span style="--c:${z.ac}" title="${esc(z.n)} essence">${e[i]} ${esc(MODS[z.mod].n.toLowerCase())}</span>`:'').join('')}</div>`;}
 function resHtml(r){return `<div class="res">${r.map((v,i)=>`<span style="--c:${TIER[i].c}">${v} ${tn(i)}</span>`).join('')}</div>`;}
-const TANK_SLOT=[null,null,null,[1,80],[2,80],[3,60]],BASE_SLOT=[null,null,[1,60],[2,60],[3,50]];
+const TANK_SLOT=[null,[0,40],[0,90],[1,80],[2,80],[3,60]],BASE_SLOT=[null,null,[1,60],[2,60],[3,50]];
 function statVal(t,k){const s=t.stats[k];if(t.isBase)return k==='hp'?`${1600+300*s} HP`:k==='def'?`${2+s} def`:`${260+60*s} range`;
   return k==='hp'?`${100+20*s} HP`:k==='def'?`${s} def`:k==='bat'?`${100+25*s} battery`:`${100+20*s}% cooling`;}
 function statButtons(t,defs,who){let h='';for(const k in defs){const lvl=t.stats[k];
@@ -1915,7 +2052,8 @@ function renderMenu(){
   h+=baySections();
   if(!inv){h+=section(`Base — ${usedSlots(base)}/${base.slots} slots used`,base.augs,'base','No augments. Empty slots do nothing.');
     h+=section(`Storage — ${store.augs.length}`,store.augs,'store','Augments you bring home, or that land in the base’s range, go here.',
-      store.augs.some(a=>!AUG[a.type].unique)?`<div class="row" style="margin-top:6px"><button class="act warn" data-act="salvageAll">Salvage all in storage (keeps legendaries) · +${resStr(salvageAllOf(store.augs))}</button></div>`:'');}
+      store.augs.some(a=>!AUG[a.type].unique)?`<div class="row" style="margin-top:6px"><button class="act warn" data-act="salvageAll">Salvage all in storage (keeps legendaries) · +${resStr(salvageAllOf(store.augs))}</button></div>`:'');
+    h+=section(`Locker — ${(store.locker||[]).length}`,store.locker||[],'locker','Keep favorites here. Salvage all never touches the locker, and it survives your base being destroyed.');}
   if(sel){const loc=allLocs().find(l=>locArr(l).some(x=>x.uid===sel.uid));if(loc)sel.loc=loc;else sel=null;}
   if(sel){const a=locArr(sel.loc).find(x=>x.uid===sel.uid);
     if(a){const d=AUG[a.type];h+=`<div class="detail"><strong>${d.n}</strong> <span class="lv">${d.unique?'Legendary · ':''}Lv ${a.lvl}/20 · ${d.cat}${d.bat?' · battery':''}</span><div class="stats">${describe(a)}${d.unique?` <em>${LEGEND_SRC[a.type]||''}.</em>`:''}</div>`;
@@ -1926,7 +2064,8 @@ function renderMenu(){
       if(sel.loc!=='cargo'&&inv)h+=`<button class="act" data-act="toCargo">Move to cargo</button>`;
       for(const dd of droneAugs())if(d.bay&&!dd.bay&&sel.loc!=='bay:'+dd.uid)h+=`<button class="act" data-act="toBay" data-bay="${dd.uid}">Put in drone bay</button>`;
       if(!inv){if(sel.loc!=='base')h+=`<button class="act" data-act="toBase" ${freeSlots(base)<d.size?'disabled':''}>Put in base</button>`;
-        if(sel.loc!=='store')h+=`<button class="act" data-act="toStore">Move to storage</button>`;}
+        if(sel.loc!=='store')h+=`<button class="act" data-act="toStore">Move to storage</button>`;
+        if(sel.loc!=='locker')h+=`<button class="act" data-act="toLocker">Move to locker</button>`;}
       if(inv&&(sel.loc==='cargo'||sel.loc==='tank'))h+=`<button class="act warn" data-act="drop">Drop on the ground</button>`;
       h+='</div>';
       if(a.mod&&MODS[a.mod])h+=`<p class="lv" style="color:${MODS[a.mod].c}">${MODS[a.mod].n} infusion: ${MODS[a.mod].d}</p>`;
@@ -1934,11 +2073,13 @@ function renderMenu(){
         h+=`<h3>Infuse — ${INFUSE.ess} essence + ${INFUSE.silver} silver</h3>`+(opts.length?`<div class="row">${opts.map(z=>`<button class="act" data-infuse="${z.i}" ${store.res[1]>=INFUSE.silver?'':'disabled'} style="border-color:${MODS[z.mod].c}" title="${esc(MODS[z.mod].d)}">${MODS[z.mod].n} <span class="lv">(${z.n})</span></button>`).join('')}</div>`
           :'<div class="empty-note">Collect essence (the colored diamonds) in a zone to infuse augments with its power. Each zone’s essence gives a different effect.</div>');}
       if(!inv&&a.lvl<20){const c=costFor(a.lvl+1,d.unique);const ok=store.res[c.tier]>=c.amt;
-        h+=`<h3>Upgrade to Lv ${a.lvl+1} — ${c.amt} ${tn(c.tier)}. Pick one:</h3><div class="row">`;
+        const up=a.lvl>1&&c.tier>costFor(a.lvl,d.unique).tier?` (steps up from ${tn(c.tier-1)} to ${tn(c.tier)})`:'';
+        h+=`<h3>Upgrade to Lv ${a.lvl+1} — <span style="color:${TIER[c.tier].c}">${c.amt} ${tn(c.tier)}</span>${up}. Pick one:</h3><div class="row">`;
         for(const k in d.ups)h+=`<button class="act up" data-up="${k}" ${ok?'':'disabled'}>${d.ups[k]} (${S(a,k)})</button>`;h+='</div>';}
       if(!inv){h+='<div class="row" style="margin-top:8px">';
         if(a.lvl>1)h+=`<button class="act" data-act="reset">Restart to Lv 1 (refund ${resStr(refundOf(a))})</button>`;
-        h+=`<button class="act warn" data-act="salvage">Salvage for ${resStr(salvageOf(a))}</button></div>`;}
+        const bpGain=!d.unique&&d.craft&&!(v.bp||{})[a.type]?` + 25% ${d.n} blueprint`:'';
+        h+=`<button class="act warn" data-act="salvage">Salvage for ${resStr(salvageOf(a))}${bpGain}</button></div>`;}
       h+='</div>';}}
   h+=structSection(v);
   if(inv){h+=controlsHtml();sheet.innerHTML=h;return;}
@@ -1946,16 +2087,28 @@ function renderMenu(){
   const ts=TANK_SLOT[player.slots];if(ts)h+=`<button class="act up" data-act="tankSlot" ${store.res[ts[0]]>=ts[1]?'':'disabled'}>+1 slot · ${ts[1]} ${tn(ts[0])}</button>`;
   h+='</div><h3>Base structure</h3><div class="row">'+statButtons(base,BASE_STATS,'base');
   const bs=BASE_SLOT[base.slots];if(bs)h+=`<button class="act up" data-act="baseSlot" ${store.res[bs[0]]>=bs[1]?'':'disabled'}>+1 slot · ${bs[1]} ${tn(bs[0])}</button>`;
-  h+='</div><h3>Workshop</h3><div class="row">';
-  for(const k in AUG){const d=AUG[k];if(!d.craft)continue;h+=`<button class="act" data-craft="${k}" ${store.res[d.craft[0]]>=d.craft[1]?'':'disabled'}>Build ${d.n} · ${d.craft[1]} ${tn(d.craft[0])}</button>`;}
-  h+='</div>';
+  h+='</div>'+workshopHtml(v);
   sheet.innerHTML=h;}
+// Workshop builds unlocked blueprints; the rest are researched in the lab or by salvaging (25% per salvage)
+function workshopHtml(v){const bp=v.bp||{gun:1},bpp=v.bpp||{},store=v.store;
+  const all=BP_TYPES().sort((a,b)=>AUG[a].n.localeCompare(AUG[b].n)),have=all.filter(k=>bp[k]),left=all.filter(k=>!bp[k]);
+  let h=`<h3>Workshop — ${have.length}/${all.length} blueprints</h3><div class="row">`;
+  for(const k of have){const d=AUG[k];h+=`<button class="act" data-craft="${k}" ${store.res[d.craft[0]]>=d.craft[1]?'':'disabled'}>Build ${d.n} · ${d.craft[1]} ${tn(d.craft[0])}</button>`;}
+  h+='</div>';
+  if(left.length)h+=`<div class="row" style="margin-top:6px">${left.map(k=>`<span class="act" style="opacity:.6;cursor:default" title="Research it in a Research Lab, or salvage this augment (25% each)">🔒 ${AUG[k].n} · ${Math.round(100*(bpp[k]||0))}%</span>`).join('')}</div>`;
+  h+='<h3>Research</h3>';
+  if(!left.length)return h+'<div class="empty-note">Every blueprint is unlocked.</div>';
+  if(!((v.sc||{}).lab))return h+'<div class="empty-note">Build a Research Lab (Structures) to feed it resources for a chance at a new blueprint. Salvaging an augment also gives 25% toward its blueprint.</div>';
+  const pity=v.pity||0;h+=`<p class="empty-note">Each feeding has a chance to unlock a random locked blueprint. Every miss adds 4% to your next try${pity?` (now +${Math.round(pity*100)}%)`:''}.</p><div class="row">`;
+  RESEARCH.forEach(([t,amt,ch],i)=>{h+=`<button class="act up" data-research="${i}" ${store.res[t]>=amt?'':'disabled'}>Feed ${amt} ${tn(t)} · ${Math.round(100*Math.min(1,ch+pity))}%</button>`;});
+  return h+'</div>';}
 sheet.addEventListener('click',e=>{if(dragJustEnded){dragJustEnded=false;return;}const b=e.target.closest('button');if(!b||b.disabled)return;
   if(b.dataset.sel){const [loc,uid]=b.dataset.sel.split(':');sel=(sel&&sel.uid===+uid)?null:{loc,uid:+uid};renderMenu();return;}
   if(b.dataset.stat){const [who,k]=b.dataset.stat.split(':');menuAct({op:'stat',who,k});return;}
   const act=b.dataset.act;
   if(act==='close'){closeMenu();return;}
   if(b.dataset.craft){menuAct({op:'craft',k:b.dataset.craft});return;}
+  if(b.dataset.research){menuAct({op:'research',k:+b.dataset.research});return;}
   if(act==='tankSlot'||act==='baseSlot'){menuAct({op:act});return;}
   if(b.dataset.struct){structAct(b.dataset.struct);return;}
   if(act==='salvageAll'){const n=view().store.augs.filter(a=>!AUG[a.type].unique).length;
@@ -1963,7 +2116,7 @@ sheet.addEventListener('click',e=>{if(dragJustEnded){dragJustEnded=false;return;
   if(!sel)return;const {loc,uid}=sel;
   if(b.dataset.up){menuAct({op:'up',loc,uid,k:b.dataset.up});return;}
   if(b.dataset.infuse){menuAct({op:'infuse',loc,uid,z:+b.dataset.infuse});return;}
-  if(act==='toTank'||act==='toBase'||act==='toStore'||act==='toCargo'){moveAug(loc,uid,act.slice(2).toLowerCase());return;}
+  if(act==='toTank'||act==='toBase'||act==='toStore'||act==='toCargo'||act==='toLocker'){moveAug(loc,uid,act.slice(2).toLowerCase());return;}
   if(act==='toBay'){moveAug(loc,uid,'bay:'+b.dataset.bay);return;}
   if(act==='drop'){sel=null;menuAct({op:'drop',loc,uid});return;}
   if(act==='reset'){menuAct({op:'reset',loc,uid});return;}
@@ -1983,8 +2136,8 @@ function menuAct(m){m.mode=menuMode;if(isGuest()){netSend(Object.assign({t:'menu
   const r=doMenu(me,m);if(m.op==='craft'&&r)sel={loc:'store',uid:r};syncLocal();renderMenu();}
 function structAct(k){if(isGuest())netSend({t:'struct',k});else{buildStruct(me,k);renderMenu();}}
 function salvageAllOf(augs){const r=[0,0,0,0];for(const a of augs)if(!AUG[a.type].unique)salvageOf(a).forEach((v,i)=>r[i]+=v);return r;}
-function structSection(v){if(!v.base)return '<h3>Structures</h3><div class="empty-note">Build a base to unlock turrets, extractors, a refinery, and a repair pylon.</div>';
-  let h='<h3>Structures</h3><p class="empty-note">Paid from storage. Turrets, the refinery, and the pylon go where your tank is inside your base ring; extractors go on the node you’re next to.</p><div class="row">';
+function structSection(v){if(!v.base)return '<h3>Structures</h3><div class="empty-note">Build a base to unlock turrets, extractors, a refinery, a repair pylon, and a research lab.</div>';
+  let h='<h3>Structures</h3><p class="empty-note">Paid from storage. Turrets, the refinery, the pylon, and the lab go where your tank is inside your base ring; extractors go on the node you’re next to.</p><div class="row">';
   const cnt=v.sc||{};for(const k in STRUCT){const d=STRUCT[k],n=cnt[k]||0,ok=n<d.max&&d.cost.every(([i,c])=>v.store.res[i]>=c);
     h+=`<button class="act up" data-struct="${k}" ${ok?'':'disabled'} title="${esc(d.info)}">${d.n} ${n}/${d.max} · ${d.cost.map(([i,c])=>c+' '+tn(i)).join(', ')}</button>`;}
   return h+'</div>';}
@@ -1993,7 +2146,7 @@ const own=(o,k)=>typeof k==='string'&&Object.prototype.hasOwnProperty.call(o,k);
 const INFUSE={ess:10,silver:20};
 // every place an augment can sit for this player right now. Bays are the Drones augment itself (it holds .bay).
 function locsOf(q,atBase){const t=q.tank,L={tank:t.augs,cargo:t.cargo};const holders=[...t.augs];
-  if(atBase){L.base=q.base.augs;L.store=q.store.augs;holders.push(...q.base.augs);}
+  if(atBase){if(!q.store.locker)q.store.locker=[];L.base=q.base.augs;L.store=q.store.augs;L.locker=q.store.locker;holders.push(...q.base.augs);}
   for(const a of holders)if(a.type==='drones')L['bay:'+a.uid]=a;return L;}
 function takeAug(L,loc,uid){const c=L[loc];if(!c)return null;if(Array.isArray(c)){const i=c.findIndex(x=>x.uid===uid);return i<0?null:c.splice(i,1)[0];}
   if(c.bay&&c.bay.uid===uid){const a=c.bay;c.bay=null;return a;}return null;}
@@ -2012,12 +2165,17 @@ function doMenu(q,m){const t=q.tank,b=q.base,st=q.store;if(!m||typeof m.op!=='st
     takeAug(L,m.loc,m.uid);const c=L[m.to];if(Array.isArray(c))c.push(a);else c.bay=a;a._h=null;a._on=false;return;}
   if(!atBase)return;
   switch(m.op){
-    case 'salvageAll':{const keep=[];let n=0;for(const a of st.augs){if(AUG[a.type].unique){keep.push(a);continue;}salvageOf(a).forEach((v,k)=>st.res[k]+=v);n++;}
+    case 'salvageAll':{const keep=[];let n=0;for(const a of st.augs){if(AUG[a.type].unique){keep.push(a);continue;}salvageOf(a).forEach((v,k)=>st.res[k]+=v);addBp(q,a.type,0.25);n++;}
       st.augs=keep;q.store.augs=keep;toastTo(q,`Salvaged ${n} augment${n===1?'':'s'}`);return;}
     case 'open':bank(q,true);return;
     case 'stat':{const tt=m.who==='tank'?t:m.who==='base'?b:null,defs=m.who==='tank'?TANK_STATS:BASE_STATS;if(!tt||!own(defs,m.k)||tt.stats[m.k]>=defs[m.k].max)return;
       const c=costFor(tt.stats[m.k]+2);if(st.res[c.tier]<c.amt)return;st.res[c.tier]-=c.amt;tt.stats[m.k]++;applyStats(tt);return;}
-    case 'craft':{if(!own(AUG,m.k)||!AUG[m.k].craft)return;const d=AUG[m.k];if(st.res[d.craft[0]]<d.craft[1])return;
+    // feed the Research Lab: a chance to unlock a random blueprint you don't have yet
+    case 'research':{const R0=Number.isInteger(m.k)?RESEARCH[m.k]:null;if(!R0||!hasLab(q))return;const left=BP_TYPES().filter(k=>!q.bp[k]);if(!left.length){toastTo(q,'Every blueprint is already unlocked');return;}
+      if(st.res[R0[0]]<R0[1])return;st.res[R0[0]]-=R0[1];
+      if(rnd()<Math.min(1,R0[2]+q.rsPity)){q.rsPity=0;unlockBp(q,left[Math.floor(rnd()*left.length)]);}
+      else{q.rsPity+=0.04;toastTo(q,`No breakthrough this time (next try +${Math.round(q.rsPity*100)}%)`);}return;}
+    case 'craft':{if(!own(AUG,m.k)||!AUG[m.k].craft||!q.bp[m.k])return;const d=AUG[m.k];if(st.res[d.craft[0]]<d.craft[1])return;
       st.res[d.craft[0]]-=d.craft[1];const a=newAug(m.k);st.augs.push(a);toastTo(q,`Built ${d.n}`);return a.uid;}
     case 'tankSlot':{const c=TANK_SLOT[t.slots];if(!c||st.res[c[0]]<c[1])return;st.res[c[0]]-=c[1];t.slots++;toastTo(q,'Tank slot added');return;}
     case 'baseSlot':{const c=BASE_SLOT[b.slots];if(!c||st.res[c[0]]<c[1])return;st.res[c[0]]-=c[1];b.slots++;toastTo(q,'Base slot added');return;}}
@@ -2027,7 +2185,7 @@ function doMenu(q,m){const t=q.tank,b=q.base,st=q.store;if(!m||typeof m.op!=='st
   else if(m.op==='infuse'){const z=m.z;if(!Number.isInteger(z)||!ZONES[z]||st.ess[z]<INFUSE.ess||st.res[1]<INFUSE.silver)return;
     st.ess[z]-=INFUSE.ess;st.res[1]-=INFUSE.silver;a.mod=MOD_OF_ZONE[z];toastTo(q,`${d.n} infused with ${MODS[a.mod].n}`);}
   else if(m.op==='reset'){if(a.lvl<=1)return;refundOf(a).forEach((v,k)=>st.res[k]+=v);a.st={};a.lvl=1;toastTo(q,'Restarted to Lv 1, resources refunded');}
-  else if(m.op==='salvage'){salvageOf(a).forEach((v,k)=>st.res[k]+=v);takeAug(L,m.loc,m.uid);toastTo(q,`Salvaged ${d.n}`);}}
+  else if(m.op==='salvage'){salvageOf(a).forEach((v,k)=>st.res[k]+=v);takeAug(L,m.loc,m.uid);toastTo(q,`Salvaged ${d.n}`);addBp(q,a.type,0.25);}}
 // ---- drag and drop: mouse drags right away; touch needs a short press first so the sheet can still scroll ----
 let drag=null,dragJustEnded=false,menuSig='';
 sheet.addEventListener('pointerdown',e=>{const c=e.target.closest('.card[data-uid]');if(!c||e.button>0)return;
@@ -2049,7 +2207,7 @@ function moveGhost(x,y){drag.ghost.style.left=x+'px';drag.ghost.style.top=y+'px'
 function endDrag(){if(!drag)return;clearTimeout(drag.timer);if(drag.ghost)drag.ghost.remove();if(drag.hot)drag.hot.classList.remove('drop-hot');
   drag.c.classList.remove('dragging');drag=null;}
 function invSig(){const v=view();if(!v)return '';const f=arr=>arr.map(a=>a.uid+':'+a.lvl+':'+(a.bind||'')+(a.mod||'')+(a.bay?'/'+a.bay.uid+':'+a.bay.lvl+(a.bay.mod||''):'')).join(',');
-  return [v.store.res.join(','),(v.store.ess||[]).join(','),f(v.tank.augs),f(v.cargo||[]),v.tank.slots,JSON.stringify(v.tank.stats),v.base?f(v.base.augs)+v.base.slots+JSON.stringify(v.base.stats):'-',f(v.store.augs),JSON.stringify(v.sc||{})].join('|');}
+  return [v.store.res.join(','),(v.store.ess||[]).join(','),f(v.tank.augs),f(v.cargo||[]),v.tank.slots,JSON.stringify(v.tank.stats),v.base?f(v.base.augs)+v.base.slots+JSON.stringify(v.base.stats):'-',f(v.store.augs),f(v.store.locker||[]),JSON.stringify(v.sc||{}),JSON.stringify(v.bp||{}),JSON.stringify(v.bpp||{}),v.pity||0].join('|');}
 
 // ================= party =================
 const partyEl=$('party'),psheet=$('partySheet');let partySeq=0,partySig='';
@@ -2162,7 +2320,7 @@ function showRoom(code){const r=$('room');r.hidden=false;r.innerHTML='Room <span
 function peerLib(){if(!window.Peer){joinMsg('The multiplayer library didn’t load. Check your internet connection and reload.');return false;}
   if(location.protocol==='file:'&&!window.RTCPeerConnection){joinMsg('This browser can’t do multiplayer from a local file. Open the game in Chrome, Edge, or Firefox.');return false;}return true;}
 // Everyone must run the same game file: the world is built from it. Bump this whenever the game changes.
-const NET_VER='2026-09-25f';
+const NET_VER='2026-09-28e';
 // ---- connection routes (ICE) ----
 // STUN finds a direct route between players. When a network blocks that, a TURN relay carries the traffic instead.
 // PeerJS's built-in free relay is down, so players can add their own (stored only in this browser).
@@ -2266,7 +2424,9 @@ function onGuestConn(conn){let q=null,opened=false;
     if(!q){if(m.t!=='hello')return;
       if(m.v!==NET_VER){try{conn.send({t:'badver',v:NET_VER});}catch(_){}setTimeout(()=>conn.close(),500);
         sysChat(`${cleanText(m.name,16)||'Someone'} tried to join with a different version of the game file.`);return;}
-      q=rejoin(conn,m);if(!q&&online()<MAX_PLAYERS)q=addGuest(conn,m);return;}
+      q=rejoin(conn,m);
+      if(!q){const c=claimByName(conn,m);if(c==='deny')return;q=c;}
+      if(!q&&online()<MAX_PLAYERS)q=addGuest(conn,m);return;}
     if(q.conn!==conn)return;
     // flood guard: anything past 90 messages a second is dropped
     const now=performance.now();q.lastMsg=now;if(now-q.msgT>1000){q.msgT=now;q.msgN=0;}if(++q.msgN>90)return;
@@ -2275,16 +2435,30 @@ function onGuestConn(conn){let q=null,opened=false;
   conn.on('error',()=>{if(q&&q.conn===conn)goOffline(q);});}
 function newToken(){const b=new Uint8Array(16);crypto.getRandomValues(b);return [...b].map(v=>v.toString(16).padStart(2,'0')).join('');}
 function addGuest(conn,m){let name=cleanText(m.name,16)||'Tank';if(pls.some(p=>p.name===name))name=(name.slice(0,13)+' '+nextPlId).trim();
-  const q=mkPl(nextPlId++,name,COLORS.includes(m.color)?m.color:COLORS[0]);q.conn=conn;q.chatT=0;q.token=newToken();pls.push(q);
+  const q=mkPl(nextPlId++,name,COLORS.includes(m.color)?m.color:COLORS[0]);q.conn=conn;q.chatT=0;q.token=newToken();q.lastMsg=performance.now();
+  if(typeof m.pw==='string'&&/^\d{4}$/.test(m.pw))q.pw=m.pw;pls.push(q);
   const s=spawnPoint();q.tank=mkPlayerTank(q,s.x,s.y);ents.push(q.tank);q.tank.inv=2.5;
   try{conn.send({t:'welcome',id:q.id,code:NET.code,token:q.token});}catch(_){}
   sysChat(`${q.name} joined`);return q;}
 // Same character again: the guest proves who it is with the secret token it got when it first joined.
-function rejoin(conn,m){if(typeof m.token!=='string'||m.token.length!==32)return null;const q=pls.find(p=>p.token&&p.token===m.token);if(!q)return null;
-  if(q.conn&&q.conn!==conn){try{q.conn.close();}catch(_){}}
+function rejoin(conn,m){if(typeof m.token!=='string'||m.token.length!==32)return null;const q=pls.find(p=>p!==me&&p.token&&p.token===m.token);if(!q)return null;
+  return resume(q,conn);}
+// Taking a tank over by name: someone joining with the name of a player already in the room gets that tank
+// if they give its 4-digit password. Five wrong guesses lock the name for a minute.
+function claimByName(conn,m){const name=cleanText(m.name,16).toLowerCase();if(!name)return null;
+  const q=pls.find(p=>p!==me&&p.name.toLowerCase()===name);if(!q||!q.pw)return null;
+  const deny=(why)=>{try{conn.send({t:'badpw',n:q.name,why});}catch(_){}setTimeout(()=>{try{conn.close();}catch(_){}},500);return 'deny';};
+  if(q.pwLock&&performance.now()<q.pwLock)return deny('locked');
+  if(typeof m.pw!=='string'||m.pw!==q.pw){q.pwFail=(q.pwFail||0)+1;if(q.pwFail>=5){q.pwFail=0;q.pwLock=performance.now()+60000;}
+    if(m.pw)sysChat(`Someone tried to take over ${q.name} with the wrong password.`);return deny(m.pw?'wrong':'need');}
+  q.pwFail=0;q.token=newToken(); // the old device's rejoin link stops working
+  return resume(q,conn);}
+// put a (possibly offline) player back on a fresh connection
+function resume(q,conn){if(q.conn&&q.conn!==conn){const old=q.conn;q.conn=null;try{old.send({t:'kicked'});}catch(_){}setTimeout(()=>{try{old.close();}catch(_){}},300);}
   q.conn=conn;q.lastInv='';q.lastSoc='';q.lastFx=fxSeq;q.msgN=0;
+  q.lastMsg=performance.now(); // without this, the stale time from before the drop made the heartbeat kick them straight back out
   if(q.offline){q.offline=false;const t=q.tank;if(!ents.includes(t))ents.push(t);t.inv=2.5;t.input.mx=t.input.my=0;t.input.btns=0;t.input.fire=false;}
-  try{conn.send({t:'welcome',id:q.id,code:NET.code,token:q.token,back:1});}catch(_){}
+  try{conn.send({t:'welcome',id:q.id,code:NET.code,token:q.token,back:1,name:q.name,color:q.color});}catch(_){}
   sysChat(`${q.name} is back`);return q;}
 function goOffline(q){if(q.offline||!pls.includes(q))return;q.offline=true;q.offT=T;q.conn=null;q.recall=-1;q.lock=null;
   const t=q.tank;t.drones.forEach(d=>d.dead=true);t.drones=[];t.input.btns=0;t.input.fire=false;t.input.mx=t.input.my=0;
@@ -2329,14 +2503,14 @@ function serE(e){const o={i:e.id,k:e.kind,x:r0(e.x),y:r0(e.y),r:e.r,f:e.fill,h:r
       else if(a.type==='railgun')x.push(r2(a._ch||0));else if(a.type==='flamer')x.push(a._on?1:0,a.st.range||0);
       return x;});
     if(e.isClone)o.cl=1;
-    if(e.parts.length)o.pt=e.parts.map(p=>[r0(p.x),r0(p.y),p.st]);if(e.isPlayer){o.pn=e.name;if(e.pl.recall>=0)o.rc=r2(e.pl.recall);}else if(e.name)o.nm=e.name;}
+    if(e.parts.length)o.pt=e.parts.map(p=>p.st===2?[r0(p.x),r0(p.y),2,p.g]:[r0(p.x),r0(p.y),p.st]);if(e.isPlayer){o.pn=e.name;if(e.pl.recall>=0)o.rc=r2(e.pl.recall);}else if(e.name)o.nm=e.name;}
   return o;}
 function serFx(f){
   if(f.k==='arc'||f.k==='shatter'||f.k==='pulse')return f.e.dead?null:{k:f.k,e:f.e.id,a:r2(f.ang||0),l:f.life,x:r0(f.e.x),y:r0(f.e.y)};
   if(f.k==='bolt'||f.k==='ray'||f.k==='rail')return {k:f.k,ax:r0(f.a.x),ay:r0(f.a.y),x:r0(f.b.x),y:r0(f.b.y),c:f.col,l:f.life};
   return {k:f.k,x:r0(f.x),y:r0(f.y),r:f.r,c:f.col,l:f.life,bg:f.big?1:0,vx:f.vx,vy:f.vy};}
 function invOf(q){const t=q.tank,b=q.base;
-  return {tank:{slots:t.slots,stats:t.stats,augs:t.augs.map(serAug)},cargo:t.cargo.map(serAug),store:{res:q.store.res,ess:q.store.ess,augs:q.store.augs.map(serAug)},sc:structCounts(q),
+  return {tank:{slots:t.slots,stats:t.stats,augs:t.augs.map(serAug)},cargo:t.cargo.map(serAug),store:{res:q.store.res,ess:q.store.ess,augs:q.store.augs.map(serAug),locker:(q.store.locker||[]).map(serAug)},sc:structCounts(q),bp:q.bp,bpp:q.bpp,pity:r2(q.rsPity),
     base:b?{isBase:true,x:r0(b.x),y:r0(b.y),slots:b.slots,stats:b.stats,augs:b.augs.map(serAug)}:null};}
 function socialOf(q){return {roster:roster(),inv:q.invites.slice(),sent:pls.filter(p=>p.invites.includes(q.id)).map(p=>p.id)};}
 function meOf(q){const t=q.tank,b=q.base,cd={};for(const a of t.augs)if(a._cd>0.05)cd[a.uid]=r2(a._cd);
@@ -2376,15 +2550,24 @@ function startJoin(raw){const code=cleanText(raw,5).toUpperCase();if(!/^[A-Z0-9]
 // The join handshake, the same over a direct connection or the relay. st tracks this attempt (done, opened, timer).
 function joinVia(conn,peer,code,st){const rj=rejoinInfo(),token=rj&&rj.code===code?rj.token:undefined;
   const stop=msg=>{if(st.done||started)return;st.done=true;clearTimeout(st.to);joinMsg(msg);try{conn.close();}catch(_){}try{peer&&peer.destroy();}catch(_){}};
-  conn.on('open',()=>{st.opened=true;joinMsg(conn.relay?'Reached the room through the relay. Joining…':'Connected. Joining…');conn.send({t:'hello',v:NET_VER,name:myName,color:myColor,token});});
+  conn.on('open',()=>{st.opened=true;joinMsg(conn.relay?'Reached the room through the relay. Joining…':'Connected. Joining…');conn.send({t:'hello',v:NET_VER,name:myName,color:myColor,token,pw:myPw||undefined});});
   conn.on('data',m=>{if(!m||typeof m!=='object')return;
     if(m.t==='welcome'&&!started&&!st.done){st.done=true;clearTimeout(st.to);G.id=+m.id;NET={role:'guest',peer,conn,code};
+      if(m.back){if(typeof m.name==='string'&&cleanText(m.name,16))myName=cleanText(m.name,16);if(COLORS.includes(m.color))myColor=m.color;}
+      try{sessionStorage.removeItem(RETRY_KEY);}catch(_){}
       // remember how to come back as this same character
       if(typeof m.token==='string'&&/^[0-9a-f]{32}$/.test(m.token))try{localStorage.setItem(RKEY,JSON.stringify({code,token:m.token,name:myName,t:Date.now()}));}catch(_){}
       startGame();showRoom(/^[A-Z0-9]{5}$/.test(m.code)?m.code:code);if(m.back)toast('Welcome back — you’re in the same tank');
       if(conn.relay)addChat(null,null,'Connected through the backup relay: a direct connection was blocked, so expect a little extra lag.');return;}
     if(m.t==='full'){stop('That room is full.');return;}
+    if(m.t==='badpw'){const n=cleanText(m.n,16);stop(m.why==='locked'?`Too many wrong passwords for ${n}. Wait a minute and try again.`
+      :m.why==='wrong'?`Wrong password for ${n}. Check the 4 digits, or pick a different name to join as a new tank.`
+      :`${n} is already in this room and has a password. Enter it to take over that tank, or pick a different name.`);pwIn.focus();return;}
     if(m.t==='badver'){stop('You and the host have different versions of the game file. Both of you need the same, newest augment-tanks-v2.html (press Ctrl+F5 to refresh).');return;}
+    // this tank was taken over from another device: stop here instead of trying to reconnect
+    if(isGuest()&&NET.conn===conn&&m.t==='kicked'&&!NET.dead){NET.dead=true;try{localStorage.removeItem(RKEY);}catch(_){}
+      toast('Your tank was taken over from another device');const h=$('help');$('joinForm').hidden=false;$('helpClose').hidden=true;h.hidden=false;showRejoin();
+      joinMsg('Someone joined as your tank with its password, so this window was disconnected.');return;}
     if(isGuest()&&NET.conn===conn&&m.t==='s')onSnap(m);});
   conn.on('close',()=>{if(isGuest()&&NET.conn===conn&&!NET.dead){NET.dead=true;lostConnection();}});}
 // First try a direct connection. If the room can't be reached directly (blocked networks, slow start, or the
@@ -2410,9 +2593,17 @@ async function startJoinRelay(code,why){
 const RKEY='augtanks_rejoin';
 function rejoinInfo(){try{const r=JSON.parse(localStorage.getItem(RKEY)||'null');if(r&&/^[A-Z0-9]{5}$/.test(r.code)&&/^[0-9a-f]{32}$/.test(r.token)&&Date.now()-r.t<REJOIN_S*1000)return r;}catch(_){}return null;}
 // the host keeps a dropped player's tank for 10 minutes; reloading and rejoining puts them back in it
+// A dropped guest tries to get back in on its own: up to 3 automatic rejoins within 2 minutes, then it waits for the button.
+const RETRY_KEY='augtanks_retries';
 function lostConnection(){toast('Disconnected from the host');addChat(null,null,'Disconnected from the host.');
   try{const r=rejoinInfo();if(r){r.t=Date.now();localStorage.setItem(RKEY,JSON.stringify(r));}}catch(_){}
-  const h=$('help');$('joinForm').hidden=false;$('helpClose').hidden=true;h.hidden=false;showRejoin();joinMsg('You were disconnected. Rejoin to get your tank back.');}
+  const h=$('help');$('joinForm').hidden=false;$('helpClose').hidden=true;h.hidden=false;showRejoin();
+  let tries=[];try{tries=JSON.parse(sessionStorage.getItem(RETRY_KEY)||'[]').filter(t=>Date.now()-t<120000);}catch(_){}
+  if(rejoinInfo()&&tries.length<3){tries.push(Date.now());try{sessionStorage.setItem(RETRY_KEY,JSON.stringify(tries));}catch(_){}
+    joinMsg('You were disconnected. Reconnecting to your tank in 3 seconds…');setTimeout(()=>$('btnRejoin').click(),3000);}
+  else joinMsg('You were disconnected. Press Rejoin to get your tank back, or join again with the same name and password.');}
+// a connection can die without ever closing (sleeping laptop, network switch): no snapshots for 15s counts as lost
+setInterval(()=>{if(isGuest()&&started&&!NET.dead&&G.lastSnap&&performance.now()-G.lastSnap>15000){NET.dead=true;try{NET.conn.close();}catch(_){}lostConnection();}},2000);
 function showRejoin(){const r=rejoinInfo(),b=$('btnRejoin');if(!r){b.hidden=true;return;}b.hidden=false;b.textContent=`Rejoin room ${r.code} as ${cleanText(r.name,16)}`;}
 function onSnap(m){G.lastSnap=performance.now();
   if(Array.isArray(m.out))for(const o of m.out){if(!o)continue;
@@ -2423,7 +2614,9 @@ function onSnap(m){G.lastSnap=performance.now();
       if(BIND_OPTS.some(o=>o[0]===x.bind))a.bind=x.bind;if(own(MODS,x.mod))a.mod=x.mod;if(x.bay&&isAug(x.bay.type))a.bay=one(x.bay);return a;};
     const cl=a=>(Array.isArray(a)?a:[]).filter(x=>x&&isAug(x.type)).map(one);
     G.inv={tank:{slots:m.inv.tank.slots|0,stats:m.inv.tank.stats||{},augs:cl(m.inv.tank.augs)},cargo:cl(m.inv.cargo),sc:m.inv.sc&&typeof m.inv.sc==='object'?m.inv.sc:{},
-      store:{res:(m.inv.store.res||[0,0,0,0]).map(v=>+v||0),ess:ZONES.map((z,i)=>+((m.inv.store.ess||[])[i])||0),augs:cl(m.inv.store.augs)},
+      bp:Object.fromEntries(Object.keys(m.inv.bp||{}).filter(k=>own(AUG,k)).map(k=>[k,1])),
+      bpp:Object.fromEntries(Object.entries(m.inv.bpp||{}).filter(([k])=>own(AUG,k)).map(([k,x])=>[k,clampNum(x,0,1,0)])),pity:clampNum(m.inv.pity,0,5,0),
+      store:{res:(m.inv.store.res||[0,0,0,0]).map(v=>+v||0),ess:ZONES.map((z,i)=>+((m.inv.store.ess||[])[i])||0),augs:cl(m.inv.store.augs),locker:cl(m.inv.store.locker)},
       base:m.inv.base?{isBase:true,x:+m.inv.base.x,y:+m.inv.base.y,slots:m.inv.base.slots|0,stats:m.inv.base.stats||{},augs:cl(m.inv.base.augs)}:null};}
   wells=(m.w||[]).map(w=>({x:w[0],y:w[1],fly:w[2],rw:clampNum(w[3],50,400,270)}));strikes=(m.s||[]).map(s=>({x:s[0],y:s[1],r:s[2],t:s[3]}));
   if(m.mm)MM=m.mm;
@@ -2444,7 +2637,7 @@ function onSnap(m){G.lastSnap=performance.now();
         if(g[0]==='laser'&&Array.isArray(g[2])){a._on=true;a._beams=g[2].map(b=>({ang:b[0],len:b[1],d:b[2]?1:0}));}else if(g[0]==='grapple'&&g[2])a._hid=g[2];
         else if(g[0]==='sword'||g[0]==='beamsword'){a._ang=g[2]==null?undefined:+g[2];a.st={size:g[3]|0};}else if(g[0]==='railgun')a._ch=+g[2]||0;else if(g[0]==='flamer'){a._on=!!g[2];a.st={range:g[3]|0};}return a;});
       e.isClone=!!o.cl;
-      e.parts=(o.pt||[]).map(p=>({x:p[0],y:p[1],st:p[2]}));}
+      e.parts=(o.pt||[]).map(p=>({x:p[0],y:p[1],st:p[2]|0,g:p[3]|0}));}
     seen.add(o.i);list.push(e);}
   for(const id of G.ents.keys())if(!seen.has(id))G.ents.delete(id);
   for(const e of list)for(const a of e.augs)if(a._hid)a._h=G.ents.get(a._hid)||null;
@@ -2532,12 +2725,15 @@ function startGame(){
   addChat(null,null,'Enter chat · I inventory · H home · C contracts · P party. Capture beacons, finish contracts, and watch for world events.');}
 // ---- start screen ----
 const nameIn=$('nameIn'),codeIn=$('codeIn'),swEl=$('swatches');
-try{const pr=JSON.parse(localStorage.getItem(PKEY)||'{}');if(pr.name)nameIn.value=cleanText(pr.name,16);if(COLORS.includes(pr.color))myColor=pr.color;}catch(_){}
+const pwIn=$('pwIn');let myPw='';
+try{const pr=JSON.parse(localStorage.getItem(PKEY)||'{}');if(pr.name)nameIn.value=cleanText(pr.name,16);if(COLORS.includes(pr.color))myColor=pr.color;if(/^\d{4}$/.test(pr.pw||''))pwIn.value=pr.pw;}catch(_){}
+pwIn.addEventListener('input',()=>{pwIn.value=pwIn.value.replace(/\D/g,'').slice(0,4);});
 function drawSwatches(){swEl.innerHTML=COLORS.map((c,i)=>`<button role="radio" aria-checked="${c===myColor}" aria-label="${COLOR_NAMES[i]}" title="${COLOR_NAMES[i]}" data-c="${c}" style="--c:${c}"></button>`).join('');}
 drawSwatches();
 swEl.addEventListener('click',e=>{const b=e.target.closest('button[data-c]');if(!b)return;myColor=b.dataset.c;drawSwatches();});
 function readForm(){myName=cleanText(nameIn.value,16);if(!myName){joinMsg('Give your tank a name first.');nameIn.focus();return false;}
-  try{localStorage.setItem(PKEY,JSON.stringify({name:myName,color:myColor}));}catch(_){}return true;}
+  myPw=pwIn.value.trim();if(myPw&&!/^\d{4}$/.test(myPw)){joinMsg('The password needs exactly 4 digits (or leave it empty).');pwIn.focus();return false;}
+  try{localStorage.setItem(PKEY,JSON.stringify({name:myName,color:myColor,pw:myPw}));}catch(_){}return true;}
 let busy=false;
 $('btnSolo').addEventListener('click',()=>{if(busy||started||!readForm())return;startGame();});
 $('btnHost').addEventListener('click',()=>{if(busy||started||!readForm())return;busy=true;setTimeout(()=>busy=false,4000);startHost();});
@@ -2553,7 +2749,7 @@ $('btnRelayClear').addEventListener('click',()=>{try{localStorage.removeItem(REL
 const AUTO_REJOIN='augtanks_autorejoin';
 $('btnRejoin').addEventListener('click',()=>{const r=rejoinInfo();if(!r)return;
   if(started){try{sessionStorage.setItem(AUTO_REJOIN,'1');}catch(_){}location.reload();return;}
-  if(busy)return;busy=true;setTimeout(()=>busy=false,4000);myName=cleanText(r.name,16)||'Tank';startJoin(r.code);});
+  if(busy)return;busy=true;setTimeout(()=>busy=false,4000);myName=cleanText(r.name,16)||'Tank';myPw=/^\d{4}$/.test(pwIn.value)?pwIn.value:'';startJoin(r.code);});
 showRejoin();
 try{if(sessionStorage.getItem(AUTO_REJOIN)){sessionStorage.removeItem(AUTO_REJOIN);if(rejoinInfo())setTimeout(()=>$('btnRejoin').click(),50);}}catch(_){}
 // ---- loop ----
